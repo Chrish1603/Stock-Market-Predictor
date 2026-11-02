@@ -4,15 +4,19 @@ An automated machine-learning pipeline for US stocks: it downloads, cleans and p
 forecasts **risk** (volatility, chance of a 5% drop, market regime) and **direction** (up/down, 1-20 days ahead),
 sizes positions with volatility targeting, and tracks every live prediction. A Streamlit dashboard shows it all.
 
-**Main findings (all out of sample):**
-- **Direction is close to unpredictable.** Across 12 models and many input and model variations, the best
-  walk-forward ROC-AUC is about 0.52 (0.5 = coin flip). The tests behind that are documented below.
-- **Risk is predictable.** Volatility forecasts beat "same as last month" for every stock and horizon; for the
-  S&P 500 they explain 42% of the variation in 5-day volatility.
-- **Volatility targeting works.** On a 2013-2026 out-of-sample backtest it cut the 4-stock portfolio's worst
-  drawdown from -37.5% to -17.8% and raised its Sharpe ratio from 1.31 to 1.40.
-- **A better forecast didn't mean better sizing.** Sizing with last month's volatility did as well or better
-  than sizing with the model's forecast, so the simpler rule is the default.
+**Main findings** (all out of sample; every claim is tested with confidence intervals in
+[docs/RESULTS.md](docs/RESULTS.md)):
+- **Risk is predictable.** Volatility forecasts clearly beat both "same as last month" (R² +0.31) and the
+  standard HAR model (+0.05), p < 0.001. For the S&P 500 they explain 42% of the variation in 5-day volatility.
+  Earnings dates measurably help (p = 0.03). Drop probabilities beat the historical rate, slightly (p = 0.02).
+- **Direction is barely predictable.** The chosen models beat a coin flip by a statistically clear but tiny
+  margin (ROC-AUC 0.52 vs 0.50, p < 0.001). No optional input, and pooling 63 stocks, made a detectable difference.
+- **Volatility targeting halves drawdowns.** On a 2013-2026 out-of-sample backtest it cut the 4-stock
+  portfolio's worst drawdown from -37.5% to -17.8%. Its Sharpe ratio (1.40 vs 1.31) is *not* clearly better than
+  buy-and-hold once uncertainty is accounted for (p = 0.38): the benefit is a smoother ride, not more return per
+  unit of risk.
+- **A better forecast didn't mean better sizing.** Sizing with last month's volatility did as well as sizing with
+  the model's forecast, so the simpler rule is the default.
 
 > Educational project, not financial advice.
 
@@ -61,6 +65,7 @@ smp run-all --skip-train       # refresh data and predictions with existing mode
 smp run-all --tune             # tune LightGBM with Optuna (pip install -e ".[tune]")
 smp ingest | clean | features | train | predict   # run a single stage
 smp track-record               # how past live predictions turned out
+smp experiment run experiments/direction_inputs.yaml   # compare config variants (see below)
 
 streamlit run app/dashboard.py # open the dashboard
 ```
@@ -152,6 +157,10 @@ data sources, longer horizons) rather than a trading signal.
 
 ## Which inputs help
 
+> **Update:** the formal experiment ([direction_inputs](experiments/reports/direction_inputs.md)) found none of
+> these direction differences statistically clear (all p = 1.0 after correction). The tables below are the
+> original informal comparison, kept for the record. Earnings dates do clearly help the *volatility* forecasts.
+
 Each optional input group was tested by retraining all 12 models (4 tickers x 3 horizons) with it switched on or off.
 Mean walk-forward CV ROC-AUC (0.5 = guessing):
 
@@ -179,6 +188,36 @@ Pooled is better in the single hold-out year but clearly worse across the CV yea
 default. A pooled model mostly learns market-wide moves, which are the hardest part to predict; predicting each
 stock's return relative to the market is the natural next experiment. The universe lists today's large companies,
 which favours past winners (survivorship bias).
+
+## How results are tested
+
+Comparisons are run with `smp experiment`, not by eyeballing averages. An experiment is a YAML file in
+[experiments/](experiments/) listing variants as overrides to `config.yaml`, for example:
+
+```yaml
+name: direction_inputs
+kind: direction                 # direction | risk | allocation
+metric: classifier.roc_auc
+control: default
+compare_models: [baseline]      # also test the chosen model against these
+variants:
+  default: {}
+  plus_rates: {data: {market_tickers: [SPY, ^VIX, ^TNX, ^IRX]}}
+```
+
+Each variant trains in its own folder (live models are untouched; unchanged variants are reused). Scores are
+paired by stock, horizon and walk-forward period. 95% intervals come from a **cluster bootstrap over time
+periods**, because scores from the same period move together; treating them as independent would make intervals
+far too narrow. Allocation comparisons use a **block bootstrap** of daily returns. p-values are
+**Holm-corrected** across the variants in each experiment, so running many variants doesn't manufacture a winner.
+
+Reports: [experiments/reports/](experiments/reports/) · summary: [docs/RESULTS.md](docs/RESULTS.md).
+
+```bash
+smp experiment list            # experiments and whether each has a report
+smp experiment run experiments/risk_vol_models.yaml
+smp experiment index           # rebuild docs/RESULTS.md
+```
 
 ## Tests
 

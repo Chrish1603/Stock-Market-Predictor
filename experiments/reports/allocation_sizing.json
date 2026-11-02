@@ -1,0 +1,104 @@
+{
+  "name": "allocation_sizing",
+  "question": "Does volatility targeting beat buy-and-hold, and which sizing settings work best?",
+  "kind": "allocation",
+  "metric": "sharpe",
+  "control": "default",
+  "date": "2026-11-03",
+  "variants": {
+    "default": {
+      "mean": 1.3977237349225355,
+      "max_drawdown": -0.17770514262732207,
+      "n": 3406
+    },
+    "target_10": {
+      "mean": 1.3736760332362439,
+      "max_drawdown": -0.1289564501115884,
+      "n": 3406,
+      "diff": -0.024051232660789346,
+      "ci_low": -0.07749524814690101,
+      "ci_high": 0.032600067573824235,
+      "p_value": 0.39,
+      "n_days": 3406,
+      "p_holm": 1.0,
+      "verdict": "no clear difference"
+    },
+    "target_20": {
+      "mean": 1.412782360464852,
+      "max_drawdown": -0.21046190725316305,
+      "n": 3406,
+      "diff": 0.015060836631902275,
+      "ci_low": -0.032695679026125544,
+      "ci_high": 0.0638866181415229,
+      "p_value": 0.5345,
+      "n_days": 3406,
+      "p_holm": 1.0,
+      "verdict": "no clear difference"
+    },
+    "leverage_1_5": {
+      "mean": 1.3814304483629662,
+      "max_drawdown": -0.17738897182122493,
+      "n": 3406,
+      "diff": -0.016295678937023217,
+      "ci_low": -0.05647034906849055,
+      "ci_high": 0.030675925839177196,
+      "p_value": 0.4555,
+      "n_days": 3406,
+      "p_holm": 1.0,
+      "verdict": "no clear difference"
+    },
+    "no_band": {
+      "mean": 1.4194338985658064,
+      "max_drawdown": -0.16549504868599207,
+      "n": 3406,
+      "diff": 0.02171335139215258,
+      "ci_low": -0.0070101305678261835,
+      "ci_high": 0.054142063245329,
+      "p_value": 0.162,
+      "n_days": 3406,
+      "p_holm": 0.648,
+      "verdict": "no clear difference"
+    }
+  },
+  "models": {},
+  "strategies": {
+    "buy_hold": {
+      "mean": 1.3121167702832963,
+      "max_drawdown": -0.37542295791790825,
+      "diff": 0.08561953448948545,
+      "ci_low": -0.10262028340673492,
+      "ci_high": 0.2641112629412399,
+      "p_value": 0.38,
+      "n_days": 3406,
+      "p_holm": 0.38,
+      "verdict": "no clear difference"
+    },
+    "model_vol_target": {
+      "mean": 1.2943945334890288,
+      "max_drawdown": -0.2282631816321019,
+      "diff": 0.10334437347696768,
+      "ci_low": -0.017411551628291864,
+      "ci_high": 0.23080017200315317,
+      "p_value": 0.1135,
+      "n_days": 3406,
+      "p_holm": 0.227,
+      "verdict": "no clear difference"
+    },
+    "model_vol_target_drop_filter": {
+      "mean": 1.2650410927773983,
+      "max_drawdown": -0.22573507203522258,
+      "diff": 0.1327021242158899,
+      "ci_low": -0.008525921098401081,
+      "ci_high": 0.2592783376457824,
+      "p_value": 0.0485,
+      "n_days": 3406,
+      "p_holm": 0.14550000000000002,
+      "verdict": "no clear difference"
+    }
+  },
+  "control_strategy": {
+    "name": "trailing_vol_target",
+    "sharpe": 1.3977237349225355,
+    "max_drawdown": -0.17770514262732207
+  }
+}

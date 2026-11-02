@@ -254,6 +254,14 @@ def build_report(spec: dict, cfgs: dict[str, Config]) -> dict:
     return result
 
 
+def _p(p: float) -> str:
+    return "< 0.001" if p < 0.001 else f"{p:.3f}"
+
+
+def _p_phrase(p: float) -> str:
+    return "p < 0.001" if p < 0.001 else f"p = {p:.3f}"
+
+
 def _num(x: float, digits: int = 4) -> str:
     return "–" if x is None or np.isnan(x) else f"{x:.{digits}f}"
 
@@ -294,7 +302,7 @@ def render_markdown(spec: dict, result: dict) -> str:
             wl = "" if alloc else f" {v['wins']} / {v['losses']} |"
             lines.append(
                 f"| {n} | {_num(v['mean'], d)} |{dd} {_sig(v['diff'], d)} | [{_sig(v['ci_low'], d)}, "
-                f"{_sig(v['ci_high'], d)}] | {v['p_holm']:.3f} |{wl} {v['verdict']} |"
+                f"{_sig(v['ci_high'], d)}] | {_p(v['p_holm'])} |{wl} {v['verdict']} |"
             )
 
     if result["models"]:
@@ -308,7 +316,7 @@ def render_markdown(spec: dict, result: dict) -> str:
         for n, v in result["models"].items():
             lines.append(
                 f"| {n} | {_num(v['mean'])} | {_sig(v['diff'])} | [{_sig(v['ci_low'])}, {_sig(v['ci_high'])}]"
-                f" | {v['p_holm']:.3f} | {v['wins']} / {v['losses']} | {v['verdict']} |"
+                f" | {_p(v['p_holm'])} | {v['wins']} / {v['losses']} | {v['verdict']} |"
             )
     if result["strategies"]:
         cs = result["control_strategy"]
@@ -324,7 +332,7 @@ def render_markdown(spec: dict, result: dict) -> str:
         for n, v in result["strategies"].items():
             lines.append(
                 f"| {n} | {v['mean']:.2f} | {v['max_drawdown']:.1%} | {v['diff']:+.2f} | "
-                f"[{v['ci_low']:+.2f}, {v['ci_high']:+.2f}] | {v['p_holm']:.3f} | {v['verdict']} |"
+                f"[{v['ci_low']:+.2f}, {v['ci_high']:+.2f}] | {_p(v['p_holm'])} | {v['verdict']} |"
             )
     if result.get("breakdown"):
         names = list(result["variants"])
@@ -400,11 +408,11 @@ def build_index() -> Path:
         for n, v in r.get("variants", {}).items():
             if "verdict" in v:
                 lines.append(
-                    f"- **{n}** vs `{r['control']}`: {v['verdict']} (Δ {v['diff']:+.4f}, p = {v['p_holm']:.3f})"
+                    f"- **{n}** vs `{r['control']}`: {v['verdict']} (Δ {v['diff']:+.4f}, {_p_phrase(v['p_holm'])})"
                 )
         for group, label in (("models", "chosen model vs"), ("strategies", "default strategy vs")):
             for n, v in r.get(group, {}).items():
-                lines.append(f"- {label} **{n}**: {v['verdict']} (Δ {v['diff']:+.4f}, p = {v['p_holm']:.3f})")
+                lines.append(f"- {label} **{n}**: {v['verdict']} (Δ {v['diff']:+.4f}, {_p_phrase(v['p_holm'])})")
         lines.append("")
     RESULTS_PAGE.parent.mkdir(parents=True, exist_ok=True)
     RESULTS_PAGE.write_text("\n".join(lines))

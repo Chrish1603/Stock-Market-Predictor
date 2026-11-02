@@ -1,0 +1,13 @@
+name: risk_drop_models
+question: Are the "chance of a 5% drop" probabilities better than quoting the historical drop rate?
+kind: risk
+metric: drop.brier
+control: default
+description: >
+  Brier score (mean squared error of the probabilities; lower is better). The baseline always
+  predicts the historical drop rate. Where nothing beats it, the chosen model is the baseline itself.
+base:
+  train: {n_splits: 8}
+compare_models: [baseline]
+variants:
+  default: {}

@@ -1,0 +1,15 @@
+name: risk_vol_models
+question: Do the volatility forecasts beat standard baselines, and do earnings dates help them?
+kind: risk
+metric: vol.r2
+control: default
+description: >
+  R² of log annualised realised volatility, 5 and 20 days ahead. Baselines: "persistence" (next
+  period's volatility equals the last month's) and HAR (a linear blend of weekly, monthly and
+  quarterly volatility).
+base:
+  train: {n_splits: 8}
+compare_models: [persistence, har]
+variants:
+  default: {}
+  no_earnings: {data: {earnings: false}}

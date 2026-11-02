@@ -1,0 +1,18 @@
+name: direction_inputs
+question: Is up/down direction predictable at all, and do the optional inputs help?
+kind: direction
+metric: classifier.roc_auc
+control: default
+description: >
+  The control is the current config (price, market, earnings and cross-sectional rank inputs).
+  "Chosen model vs baseline" tests whether direction beats a coin flip at all (the baseline always
+  predicts the most common class, so its ROC-AUC is 0.5).
+base:
+  train: {n_splits: 8}
+compare_models: [baseline]
+variants:
+  default: {}
+  no_earnings: {data: {earnings: false}}
+  no_universe: {data: {universe: []}}           # drops cross-sectional ranks
+  plus_rates: {data: {market_tickers: [SPY, ^VIX, ^TNX, ^IRX]}}
+  plus_sectors: {data: {sectors: {AAPL: XLK, MSFT: XLK, NVDA: SMH}}}

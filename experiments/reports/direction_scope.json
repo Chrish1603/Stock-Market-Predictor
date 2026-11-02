@@ -1,0 +1,104 @@
+{
+  "name": "direction_scope",
+  "question": "Does one pooled model trained on 63 stocks beat a separate model per stock?",
+  "kind": "direction",
+  "metric": "classifier.roc_auc",
+  "control": "per_ticker",
+  "date": "2026-11-03",
+  "variants": {
+    "per_ticker": {
+      "mean": 0.5201711498209685,
+      "n": 96
+    },
+    "pooled": {
+      "mean": 0.5149180683400508,
+      "n": 96,
+      "diff": -0.005253081480917737,
+      "ci_low": -0.02874069428028363,
+      "ci_high": 0.0155573817190104,
+      "p_value": 0.6412,
+      "n_pairs": 96,
+      "n_periods": 8,
+      "wins": 49,
+      "losses": 47,
+      "p_holm": 0.6412,
+      "verdict": "no clear difference"
+    }
+  },
+  "models": {},
+  "strategies": {},
+  "breakdown": [
+    {
+      "ticker": "AAPL",
+      "horizon": 1,
+      "per_ticker": 0.5157452225896955,
+      "pooled": 0.4948992424262817
+    },
+    {
+      "ticker": "AAPL",
+      "horizon": 5,
+      "per_ticker": 0.4927258637412037,
+      "pooled": 0.5070127914981917
+    },
+    {
+      "ticker": "AAPL",
+      "horizon": 20,
+      "per_ticker": 0.5201047932221878,
+      "pooled": 0.5297114813641548
+    },
+    {
+      "ticker": "MSFT",
+      "horizon": 1,
+      "per_ticker": 0.5232756370403733,
+      "pooled": 0.5185654290627726
+    },
+    {
+      "ticker": "MSFT",
+      "horizon": 5,
+      "per_ticker": 0.5375628472968317,
+      "pooled": 0.5198569847841047
+    },
+    {
+      "ticker": "MSFT",
+      "horizon": 20,
+      "per_ticker": 0.5466977847626595,
+      "pooled": 0.5011015257036113
+    },
+    {
+      "ticker": "NVDA",
+      "horizon": 1,
+      "per_ticker": 0.5063294086179699,
+      "pooled": 0.5189666052606949
+    },
+    {
+      "ticker": "NVDA",
+      "horizon": 5,
+      "per_ticker": 0.5198422950060403,
+      "pooled": 0.5132240411702416
+    },
+    {
+      "ticker": "NVDA",
+      "horizon": 20,
+      "per_ticker": 0.5438872537157047,
+      "pooled": 0.4885547612535484
+    },
+    {
+      "ticker": "SPY",
+      "horizon": 1,
+      "per_ticker": 0.5097811064883853,
+      "pooled": 0.5178054086767154
+    },
+    {
+      "ticker": "SPY",
+      "horizon": 5,
+      "per_ticker": 0.5261964021025382,
+      "pooled": 0.5324697398685364
+    },
+    {
+      "ticker": "SPY",
+      "horizon": 20,
+      "per_ticker": 0.49990518326803246,
+      "pooled": 0.5368488090117558
+    }
+  ]
+}

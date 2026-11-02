@@ -1,0 +1,72 @@
+{
+  "name": "risk_drop_models",
+  "question": "Are the \"chance of a 5% drop\" probabilities better than quoting the historical drop rate?",
+  "kind": "risk",
+  "metric": "drop.brier",
+  "control": "default",
+  "date": "2026-11-03",
+  "variants": {
+    "default": {
+      "mean": 0.1393986425413642,
+      "n": 64
+    }
+  },
+  "models": {
+    "baseline": {
+      "mean": 0.14176170934377386,
+      "diff": -0.0023630668024096717,
+      "ci_low": -0.0044128944952753196,
+      "ci_high": -0.0004949364206985863,
+      "p_value": 0.0162,
+      "n_pairs": 64,
+      "n_periods": 8,
+      "wins": 9,
+      "losses": 30,
+      "p_holm": 0.0162,
+      "verdict": "better"
+    }
+  },
+  "strategies": {},
+  "breakdown": [
+    {
+      "ticker": "AAPL",
+      "horizon": 5,
+      "default": 0.08916929595375597
+    },
+    {
+      "ticker": "AAPL",
+      "horizon": 20,
+      "default": 0.22549731528501432
+    },
+    {
+      "ticker": "MSFT",
+      "horizon": 5,
+      "default": 0.06325579133638728
+    },
+    {
+      "ticker": "MSFT",
+      "horizon": 20,
+      "default": 0.19354124144485155
+    },
+    {
+      "ticker": "NVDA",
+      "horizon": 5,
+      "default": 0.14562074359346552
+    },
+    {
+      "ticker": "NVDA",
+      "horizon": 20,
+      "default": 0.25623854172234156
+    },
+    {
+      "ticker": "SPY",
+      "horizon": 5,
+      "default": 0.025806850404122957
+    },
+    {
+      "ticker": "SPY",
+      "horizon": 20,
+      "default": 0.11605936059097417
+    }
+  ]
+}

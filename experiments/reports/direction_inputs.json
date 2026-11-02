@@ -1,0 +1,196 @@
+{
+  "name": "direction_inputs",
+  "question": "Is up/down direction predictable at all, and do the optional inputs help?",
+  "kind": "direction",
+  "metric": "classifier.roc_auc",
+  "control": "default",
+  "date": "2026-11-03",
+  "variants": {
+    "default": {
+      "mean": 0.5201711498209685,
+      "n": 96
+    },
+    "no_earnings": {
+      "mean": 0.5198813645708108,
+      "n": 96,
+      "diff": -0.0002897852501576985,
+      "ci_low": -0.004661206805575197,
+      "ci_high": 0.004362318812593538,
+      "p_value": 0.8884,
+      "n_pairs": 96,
+      "n_periods": 8,
+      "wins": 43,
+      "losses": 29,
+      "p_holm": 1.0,
+      "verdict": "no clear difference"
+    },
+    "no_universe": {
+      "mean": 0.5212766651544064,
+      "n": 96,
+      "diff": 0.001105515333437877,
+      "ci_low": -0.0031162672631905365,
+      "ci_high": 0.005695912142929349,
+      "p_value": 0.6304,
+      "n_pairs": 96,
+      "n_periods": 8,
+      "wins": 53,
+      "losses": 43,
+      "p_holm": 1.0,
+      "verdict": "no clear difference"
+    },
+    "plus_rates": {
+      "mean": 0.5198983741975217,
+      "n": 96,
+      "diff": -0.00027277562344685545,
+      "ci_low": -0.00538736425092526,
+      "ci_high": 0.004401582963012545,
+      "p_value": 0.9108,
+      "n_pairs": 96,
+      "n_periods": 8,
+      "wins": 45,
+      "losses": 51,
+      "p_holm": 1.0,
+      "verdict": "no clear difference"
+    },
+    "plus_sectors": {
+      "mean": 0.5203599063635981,
+      "n": 96,
+      "diff": 0.00018875654262958132,
+      "ci_low": -0.002266623330721626,
+      "ci_high": 0.002526862354574898,
+      "p_value": 0.8776,
+      "n_pairs": 96,
+      "n_periods": 8,
+      "wins": 35,
+      "losses": 37,
+      "p_holm": 1.0,
+      "verdict": "no clear difference"
+    }
+  },
+  "models": {
+    "baseline": {
+      "mean": 0.5,
+      "diff": 0.020171149820968504,
+      "ci_low": 0.007588916141084313,
+      "ci_high": 0.0318094867417108,
+      "p_value": 0.0008,
+      "n_pairs": 96,
+      "n_periods": 8,
+      "wins": 64,
+      "losses": 32,
+      "p_holm": 0.0008,
+      "verdict": "better"
+    }
+  },
+  "strategies": {},
+  "breakdown": [
+    {
+      "ticker": "AAPL",
+      "horizon": 1,
+      "default": 0.5157452225896955,
+      "no_earnings": 0.5151569284402997,
+      "no_universe": 0.5136170337815311,
+      "plus_rates": 0.5195996276612642,
+      "plus_sectors": 0.5233397186823184
+    },
+    {
+      "ticker": "AAPL",
+      "horizon": 5,
+      "default": 0.4927258637412037,
+      "no_earnings": 0.5015483669495178,
+      "no_universe": 0.4957877442051272,
+      "plus_rates": 0.4876149475067899,
+      "plus_sectors": 0.4924202946865385
+    },
+    {
+      "ticker": "AAPL",
+      "horizon": 20,
+      "default": 0.5201047932221878,
+      "no_earnings": 0.5367643782287759,
+      "no_universe": 0.5266955700838589,
+      "plus_rates": 0.5169253042317443,
+      "plus_sectors": 0.5240586774304679
+    },
+    {
+      "ticker": "MSFT",
+      "horizon": 1,
+      "default": 0.5232756370403733,
+      "no_earnings": 0.5191537670859983,
+      "no_universe": 0.5140993317587055,
+      "plus_rates": 0.5271864102038906,
+      "plus_sectors": 0.5201272214362624
+    },
+    {
+      "ticker": "MSFT",
+      "horizon": 5,
+      "default": 0.5375628472968317,
+      "no_earnings": 0.5407965135016151,
+      "no_universe": 0.5415763253334409,
+      "plus_rates": 0.5380618868848059,
+      "plus_sectors": 0.5352858164122447
+    },
+    {
+      "ticker": "MSFT",
+      "horizon": 20,
+      "default": 0.5466977847626595,
+      "no_earnings": 0.5565235284017656,
+      "no_universe": 0.5446463797558929,
+      "plus_rates": 0.528005776294241,
+      "plus_sectors": 0.5475510484248846
+    },
+    {
+      "ticker": "NVDA",
+      "horizon": 1,
+      "default": 0.5063294086179699,
+      "no_earnings": 0.5044993683221773,
+      "no_universe": 0.5073700965743724,
+      "plus_rates": 0.5019162405412354,
+      "plus_sectors": 0.5047447663279889
+    },
+    {
+      "ticker": "NVDA",
+      "horizon": 5,
+      "default": 0.5198422950060403,
+      "no_earnings": 0.5125329942170495,
+      "no_universe": 0.5172637590652203,
+      "plus_rates": 0.5158731289089553,
+      "plus_sectors": 0.5203527824591486
+    },
+    {
+      "ticker": "NVDA",
+      "horizon": 20,
+      "default": 0.5438872537157047,
+      "no_earnings": 0.5157178378435749,
+      "no_universe": 0.5608333414897076,
+      "plus_rates": 0.5570245118036408,
+      "plus_sectors": 0.5405558586443673
+    },
+    {
+      "ticker": "SPY",
+      "horizon": 1,
+      "default": 0.5097811064883853,
+      "no_earnings": 0.5097811064883853,
+      "no_universe": 0.5092517831318675,
+      "plus_rates": 0.5158818222403836,
+      "plus_sectors": 0.5097811064883853
+    },
+    {
+      "ticker": "SPY",
+      "horizon": 5,
+      "default": 0.5261964021025382,
+      "no_earnings": 0.5261964021025382,
+      "no_universe": 0.5340231999257474,
+      "plus_rates": 0.5184591812626057,
+      "plus_sectors": 0.5261964021025382
+    },
+    {
+      "ticker": "SPY",
+      "horizon": 20,
+      "default": 0.49990518326803246,
+      "no_earnings": 0.49990518326803246,
+      "no_universe": 0.490155416747405,
+      "plus_rates": 0.5122316528307029,
+      "plus_sectors": 0.49990518326803246
+    }
+  ]
+}

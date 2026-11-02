@@ -1,0 +1,13 @@
+name: direction_scope
+question: Does one pooled model trained on 63 stocks beat a separate model per stock?
+kind: direction
+metric: classifier.roc_auc
+control: per_ticker
+description: >
+  Both are scored on the 4 predicted tickers. Pooled folds are split by date across all stocks, so
+  fold periods line up closely but not exactly with the per-stock folds.
+base:
+  train: {n_splits: 8}
+variants:
+  per_ticker: {train: {scope: per_ticker}}
+  pooled: {train: {scope: pooled}}

@@ -1,0 +1,16 @@
+name: allocation_sizing
+question: Does volatility targeting beat buy-and-hold, and which sizing settings work best?
+kind: allocation
+metric: sharpe
+strategy: trailing_vol_target
+control: default
+description: >
+  Equal-weight portfolio of the 4 tickers, 2013 to today, using only out-of-sample forecasts. The
+  default targets 15% volatility with no leverage and sizes with last month's volatility.
+compare_strategies: [buy_hold, model_vol_target, model_vol_target_drop_filter]
+variants:
+  default: {}
+  target_10: {risk: {target_vol: 0.10}}
+  target_20: {risk: {target_vol: 0.20}}
+  leverage_1_5: {risk: {max_weight: 1.5}}
+  no_band: {risk: {rebalance_band: 0.0}}

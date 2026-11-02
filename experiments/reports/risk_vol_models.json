@@ -1,0 +1,107 @@
+{
+  "name": "risk_vol_models",
+  "question": "Do the volatility forecasts beat standard baselines, and do earnings dates help them?",
+  "kind": "risk",
+  "metric": "vol.r2",
+  "control": "default",
+  "date": "2026-11-03",
+  "variants": {
+    "default": {
+      "mean": 0.11461542278361452,
+      "n": 64
+    },
+    "no_earnings": {
+      "mean": 0.0910594735315958,
+      "n": 64,
+      "diff": -0.0235559492520187,
+      "ci_low": -0.04346532526047773,
+      "ci_high": -0.0009739465216012728,
+      "p_value": 0.0276,
+      "n_pairs": 64,
+      "n_periods": 8,
+      "wins": 16,
+      "losses": 32,
+      "p_holm": 0.0276,
+      "verdict": "worse"
+    }
+  },
+  "models": {
+    "persistence": {
+      "mean": -0.1972732279543542,
+      "diff": 0.3118886507379687,
+      "ci_low": 0.21661698598373794,
+      "ci_high": 0.42466284719093944,
+      "p_value": 0.0002,
+      "n_pairs": 64,
+      "n_periods": 8,
+      "wins": 61,
+      "losses": 3,
+      "p_holm": 0.0004,
+      "verdict": "better"
+    },
+    "har": {
+      "mean": 0.0632074734520515,
+      "diff": 0.05140794933156301,
+      "ci_low": 0.037776713587372175,
+      "ci_high": 0.06388767769663711,
+      "p_value": 0.0002,
+      "n_pairs": 64,
+      "n_periods": 8,
+      "wins": 36,
+      "losses": 12,
+      "p_holm": 0.0004,
+      "verdict": "better"
+    }
+  },
+  "strategies": {},
+  "breakdown": [
+    {
+      "ticker": "AAPL",
+      "horizon": 5,
+      "default": 0.1357082691537096,
+      "no_earnings": 0.1063193435339979
+    },
+    {
+      "ticker": "AAPL",
+      "horizon": 20,
+      "default": 0.09916472375680288,
+      "no_earnings": 0.09916472375680288
+    },
+    {
+      "ticker": "MSFT",
+      "horizon": 5,
+      "default": 0.16068561212208685,
+      "no_earnings": 0.10483313582401493
+    },
+    {
+      "ticker": "MSFT",
+      "horizon": 20,
+      "default": 0.1077840987683966,
+      "no_earnings": 0.1077840987683966
+    },
+    {
+      "ticker": "NVDA",
+      "horizon": 5,
+      "default": 0.053198539991101024,
+      "no_earnings": 0.020247453919273906
+    },
+    {
+      "ticker": "NVDA",
+      "horizon": 20,
+      "default": -0.16978814662329936,
+      "no_earnings": -0.24004325264983511
+    },
+    {
+      "ticker": "SPY",
+      "horizon": 5,
+      "default": 0.4041637779717753,
+      "no_earnings": 0.40416377797177383
+    },
+    {
+      "ticker": "SPY",
+      "horizon": 20,
+      "default": 0.12600650712834321,
+      "no_earnings": 0.12600650712834155
+    }
+  ]
+}
