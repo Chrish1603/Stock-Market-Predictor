@@ -74,5 +74,43 @@ def run_all(
     pipeline.run_all(_cfg(config, tune), skip_ingest=skip_ingest, skip_train=skip_train)
 
 
+experiment_app = typer.Typer(help="Compare config variants with confidence intervals.", no_args_is_help=True)
+app.add_typer(experiment_app, name="experiment")
+
+
+@experiment_app.command("run")
+def experiment_run(
+    spec: Path = typer.Argument(..., help="Experiment YAML, e.g. experiments/direction_inputs.yaml"),
+    fresh: bool = typer.Option(False, help="Retrain every variant even if results are up to date."),
+):
+    """Train every variant, compare with the control and write a report."""
+    from smp.experiment import REPORTS_DIR, load_spec, run_experiment
+
+    pipeline.setup_logging(load_config().paths.logs)
+    result = run_experiment(spec, fresh)
+    typer.echo(f"\nReport: {REPORTS_DIR / (load_spec(spec)['name'] + '.md')}")
+    for n, v in result["variants"].items():
+        if "verdict" in v:
+            typer.echo(f"  {n} vs {result['control']}: {v['verdict']} (diff {v['diff']:+.4f}, p={v['p_holm']:.3f})")
+
+
+@experiment_app.command("list")
+def experiment_list():
+    """Show the experiment files and whether each has a report."""
+    from smp.experiment import PROJECT_ROOT, REPORTS_DIR
+
+    for f in sorted((PROJECT_ROOT / "experiments").glob("*.yaml")):
+        has = (REPORTS_DIR / f"{f.stem}.md").exists()
+        typer.echo(f"  {f.relative_to(PROJECT_ROOT)}  {'(report)' if has else '(not run)'}")
+
+
+@experiment_app.command("index")
+def experiment_index():
+    """Rebuild docs/RESULTS.md from all reports."""
+    from smp.experiment import build_index
+
+    typer.echo(f"Wrote {build_index()}")
+
+
 if __name__ == "__main__":
     app()

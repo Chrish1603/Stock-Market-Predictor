@@ -187,19 +187,13 @@ def train_ticker(cfg: Config, ticker: str, feats: pd.DataFrame | None = None, ho
     return metrics
 
 
-def train_all(cfg: Config) -> dict:
-    from smp.allocation import backtest_all
-    from smp.regime import build_regime
-    from smp.risk import train_risk_all
-
-    def risk_and_allocation():
-        return {"risk": train_risk_all(cfg), "allocation": backtest_all(cfg), "regime": build_regime(cfg)}
-
+def train_direction(cfg: Config) -> dict:
+    """Direction models only: one per ticker and horizon, or one pooled model per horizon."""
     if cfg.train.scope == "pooled":
         from smp.pooled import train_all_pooled
 
-        return {"direction": train_all_pooled(cfg), **risk_and_allocation()}
-    results = {}
+        return train_all_pooled(cfg)
+    results: dict = {}
     for ticker in cfg.data.tickers:
         if not features_path(cfg, ticker).exists():
             log.warning("%s: no features, skipping training", ticker)
@@ -210,4 +204,18 @@ def train_all(cfg: Config) -> dict:
                 results.setdefault(ticker, {})[h] = train_ticker(cfg, ticker, feats, h)
             except Exception as exc:
                 log.error("%s %dd: training failed: %s", ticker, h, exc)
-    return {"direction": results, **risk_and_allocation()}
+    return results
+
+
+def train_all(cfg: Config) -> dict:
+    """Direction models, then risk models, the allocation backtest and the market regime."""
+    from smp.allocation import backtest_all
+    from smp.regime import build_regime
+    from smp.risk import train_risk_all
+
+    return {
+        "direction": train_direction(cfg),
+        "risk": train_risk_all(cfg),
+        "allocation": backtest_all(cfg),
+        "regime": build_regime(cfg),
+    }
