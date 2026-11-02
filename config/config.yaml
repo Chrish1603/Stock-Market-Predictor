@@ -2,11 +2,13 @@
 
 data:
   tickers: [AAPL, MSFT, NVDA, SPY]   # stocks to model
-  market_tickers: [SPY, ^VIX, ^TNX, ^IRX]  # market context: S&P 500, volatility, 10-year and 3-month yields
-  sectors:                           # sector fund per stock (relative-strength features)
-    AAPL: XLK
-    MSFT: XLK
-    NVDA: SMH
+  market_tickers: [SPY, ^VIX]        # market context: S&P 500 and volatility
+  # Optional inputs. Tested Nov 2026 (mean walk-forward CV ROC-AUC over 12 models):
+  #   earnings only 0.5181 | none 0.5172 | earnings + rates + sectors 0.5137
+  # Rates and sector funds added noise, so they're off. To try them again:
+  #   market_tickers: [SPY, ^VIX, ^TNX, ^IRX]   (10-year and 3-month Treasury yields)
+  #   sectors: {AAPL: XLK, MSFT: XLK, NVDA: SMH}
+  sectors: {}                        # sector fund per stock (relative-strength features)
   earnings: true                     # earnings-date features for stocks (skipped for ETFs)
   start: "2010-01-01"
   end: null                          # null = up to today

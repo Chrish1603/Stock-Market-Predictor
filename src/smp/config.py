@@ -13,7 +13,7 @@ DEFAULT_CONFIG = PROJECT_ROOT / "config" / "config.yaml"
 
 class DataConfig(BaseModel):
     tickers: list[str] = Field(default_factory=lambda: ["AAPL", "MSFT", "NVDA", "SPY"])
-    market_tickers: list[str] = Field(default_factory=lambda: ["SPY", "^VIX", "^TNX", "^IRX"])
+    market_tickers: list[str] = Field(default_factory=lambda: ["SPY", "^VIX"])
     sectors: dict[str, str] = Field(default_factory=dict)  # ticker -> sector fund, e.g. AAPL: XLK
     earnings: bool = True  # download earnings dates for modelled tickers (ETFs have none)
     start: str = "2010-01-01"

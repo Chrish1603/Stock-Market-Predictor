@@ -12,7 +12,7 @@ prices, trains models, and writes predictions. A Streamlit dashboard shows the r
 |---|---|---|
 | Ingest | `smp.ingest` | Daily adjusted OHLCV from Yahoo Finance in `data/raw/`. Re-runs only fetch new days, and refetch full history if past prices were re-adjusted (splits/dividends). |
 | Clean | `smp.clean` | Sorted, de-duplicated, validated prices in `data/processed/clean/`, plus `quality_report.json` (filled values, dropped rows, fixed OHLC bars, flagged extreme moves, gaps). |
-| Features | `smp.features` | Up to 45 features per day: price (returns, moving-average ratios, MACD, RSI, stochastic, volatility, ATR, Bollinger %B, volume), market (S&P 500, VIX, changes in 10-year and 3-month Treasury yields and the yield curve), sector (fund returns and the stock's strength relative to it), earnings (days to next / since last report, last EPS surprise) and calendar and targets for each horizon (1, 5, 20 days): log return and up/down direction. |
+| Features | `smp.features` | 34 features per stock by default: price (returns, moving-average ratios, MACD, RSI, stochastic, volatility, ATR, Bollinger %B, volume), market (S&P 500, VIX), earnings (days to next / since last report, last EPS surprise) and calendar. Optional: Treasury-yield and sector-fund inputs (see below). Plus targets for each horizon (1, 5, 20 days): log return and up/down direction. |
 | Train | `smp.train` | For each ticker, horizon and target: baseline, linear model, LightGBM and XGBoost compared with walk-forward cross-validation. The best non-baseline model is evaluated on the last 12 months (hold-out) and backtested, then refit on all data. Saved to `models/<TICKER>/h<N>/`. |
 | Predict | `smp.predict` | `models/predictions.parquet`: P(up) and predicted return for each horizon. |
 | Track record | `smp.history` | Every prediction is appended to `data/history/predictions.parquet` and scored once its target day has closed. Only the first prediction per ticker and day is kept, so the record can't be rewritten. |
@@ -24,7 +24,7 @@ prices, trains models, and writes predictions. A Streamlit dashboard shows the r
 - Longer-horizon backtests hold each position for the full horizon instead of trading daily.
 - Every model is compared with a naive baseline (most-common class / zero return).
 - The backtest charges 0.1% per position change and is compared with buy-and-hold.
-- Interest rates enter as changes, not levels: levels drift for years and let trees memorise eras.
+- Optional interest-rate inputs are changes, not levels: levels drift for years and let trees memorise eras.
 - Earnings dates are only treated as known up to 20 business days ahead, and an EPS surprise only from its
   reaction day (same day for pre-noon reports, else the next trading day).
 - Today's price bar is ignored until 16:30 New York time, so features and scoring only use final closing prices.
@@ -94,6 +94,20 @@ build artifact.
 
 None of the strategies reliably beats buy-and-hold. Treat this as a framework for testing ideas (new features,
 data sources, longer horizons) rather than a trading signal.
+
+## Which inputs help
+
+Each optional input group was tested by retraining all 12 models (4 tickers x 3 horizons) with it switched on or off.
+Mean walk-forward CV ROC-AUC (0.5 = guessing):
+
+| Inputs | Mean CV AUC | Better than all-inputs on |
+|---|---|---|
+| Price + market + **earnings** (default) | **0.5181** | 8/12 |
+| Price + market only | 0.5172 | 5/12 |
+| All (+ rates + sector funds) | 0.5137 | – |
+
+Rates and sector funds added noise, so they're off by default. Turn them back on in
+[config/config.yaml](config/config.yaml). The differences are small (under 0.005), so re-test after changing tickers.
 
 ## Tests
 
