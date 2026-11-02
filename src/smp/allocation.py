@@ -137,10 +137,12 @@ def backtest_all(cfg: Config) -> dict:
         (out / "stats.json").write_text(json.dumps(stats, indent=2))
         results[ticker] = stats
         returns[ticker] = curves[[f"{s}_return" for s in STRATEGIES]]
-        b, m = stats["buy_hold"], stats["model_vol_target"]
+        live = "model_vol_target" if cfg.risk.sizing_vol == "model" else "trailing_vol_target"
+        b, m = stats["buy_hold"], stats[live]
         log.info(
-            "%s allocation %s to %s: Sharpe %.2f vs buy-hold %.2f, max drawdown %.1f%% vs %.1f%%",
+            "%s allocation (%s) %s to %s: Sharpe %.2f vs buy-hold %.2f, max drawdown %.1f%% vs %.1f%%",
             ticker,
+            live,
             curves.index[0].date(),
             curves.index[-1].date(),
             m["sharpe"],
