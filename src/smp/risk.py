@@ -310,6 +310,11 @@ def predict_risk_all(cfg: Config) -> pd.DataFrame:
         {t: suggested_weight(cfg, r.trailing_vol, r.forecast_vol) for t, r in alloc.iterrows()}
     )
     df.to_parquet(risk_predictions_path(cfg), index=False)
+    mkt = df[(df["ticker"] == cfg.risk.market_ticker) & (df["horizon"] == 20)]
+    if not mkt.empty:
+        from smp.regime import current_regime
+
+        current_regime(cfg, float(mkt["forecast_vol"].iloc[0]))
     for r in df[df["horizon"] == cfg.risk.allocation_horizon].itertuples():
         log.info(
             "%s risk (%dd): forecast vol %.0f%% (trailing %.0f%%), P(-%.0f%%) %.0f%%, suggested weight %.0f%%",

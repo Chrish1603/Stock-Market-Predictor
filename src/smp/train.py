@@ -179,10 +179,11 @@ def train_ticker(cfg: Config, ticker: str, feats: pd.DataFrame | None = None, ho
 
 def train_all(cfg: Config) -> dict:
     from smp.allocation import backtest_all
+    from smp.regime import build_regime
     from smp.risk import train_risk_all
 
     def risk_and_allocation():
-        return {"risk": train_risk_all(cfg), "allocation": backtest_all(cfg)}
+        return {"risk": train_risk_all(cfg), "allocation": backtest_all(cfg), "regime": build_regime(cfg)}
 
     if cfg.train.scope == "pooled":
         from smp.pooled import train_all_pooled
