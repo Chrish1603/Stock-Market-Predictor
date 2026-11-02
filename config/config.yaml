@@ -1,0 +1,28 @@
+# Stock Market Predictor configuration
+
+data:
+  tickers: [AAPL, MSFT, NVDA, SPY]   # stocks to model
+  market_tickers: [SPY, ^VIX]        # used as market-context features
+  start: "2010-01-01"
+  end: null                          # null = up to today
+  ffill_limit: 2                     # max consecutive missing values to forward-fill
+  outlier_z: 6.0                     # flag daily returns beyond this z-score
+
+train:
+  n_splits: 5                        # walk-forward folds on the development set
+  holdout_days: 252                  # final ~12 months kept for out-of-sample evaluation
+  gap: 1                             # rows skipped between train and test in each fold
+  tune: false                        # Optuna tuning of LightGBM (needs `pip install -e .[tune]`)
+  n_trials: 20
+  random_state: 42
+
+backtest:
+  cost: 0.001                        # 0.1% cost per position change
+  prob_threshold: 0.5                # classifier: go long when P(up) > threshold
+
+paths:                               # relative to the project root
+  raw: data/raw
+  clean: data/processed/clean
+  features: data/processed/features
+  models: models
+  logs: logs
