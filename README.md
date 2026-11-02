@@ -3,12 +3,13 @@
 [![pipeline](https://github.com/Chrish1603/Stock-Market-Predictor/actions/workflows/pipeline.yml/badge.svg)](https://github.com/Chrish1603/Stock-Market-Predictor/actions/workflows/pipeline.yml)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-2a78d6)
 ![tests](https://img.shields.io/badge/tests-pytest-2a78d6)
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://chrish-patel-stock-market-predictor.streamlit.app/)
 
 An automated machine-learning system for US stocks that forecasts **risk** (volatility, the chance of a 5% drop,
 the market regime), sizes positions with **volatility targeting**, and tests every claim it makes with
 out-of-sample statistics. It runs itself every trading day, keeps a public track record, and sends a short summary.
 
-<!-- LIVE-DASHBOARD-LINK -->
+**[Open the live dashboard →](https://chrish-patel-stock-market-predictor.streamlit.app/)** (updated each US trading day)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/today-dark.png">
