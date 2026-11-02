@@ -54,6 +54,9 @@ def predict_all(cfg: Config) -> pd.DataFrame:
     cfg.paths.models.mkdir(parents=True, exist_ok=True)
     df.to_parquet(predictions_path(cfg), index=False)
     update_history(cfg, df)
+    from smp.risk import predict_risk_all
+
+    predict_risk_all(cfg)
     for r in rows:
         log.info(
             "%s %dd (as of %s): P(up)=%.3f, predicted return=%+.4f%%",

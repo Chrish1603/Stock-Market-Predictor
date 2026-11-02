@@ -178,12 +178,16 @@ def train_ticker(cfg: Config, ticker: str, feats: pd.DataFrame | None = None, ho
 
 
 def train_all(cfg: Config) -> dict:
+    from smp.allocation import backtest_all
     from smp.risk import train_risk_all
+
+    def risk_and_allocation():
+        return {"risk": train_risk_all(cfg), "allocation": backtest_all(cfg)}
 
     if cfg.train.scope == "pooled":
         from smp.pooled import train_all_pooled
 
-        return {"direction": train_all_pooled(cfg), "risk": train_risk_all(cfg)}
+        return {"direction": train_all_pooled(cfg), **risk_and_allocation()}
     results = {}
     for ticker in cfg.data.tickers:
         if not features_path(cfg, ticker).exists():
@@ -195,4 +199,4 @@ def train_all(cfg: Config) -> dict:
                 results.setdefault(ticker, {})[h] = train_ticker(cfg, ticker, feats, h)
             except Exception as exc:
                 log.error("%s %dd: training failed: %s", ticker, h, exc)
-    return {"direction": results, "risk": train_risk_all(cfg)}
+    return {"direction": results, **risk_and_allocation()}

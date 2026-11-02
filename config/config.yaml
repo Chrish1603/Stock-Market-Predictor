@@ -48,7 +48,10 @@ risk:                                # volatility / drawdown forecasts and posit
   target_vol: 0.15                   # allocation aims for 15% annualised volatility
   max_weight: 1.0                    # no leverage
   rebalance_band: 0.10               # only trade when the target weight moves by more than 10 points
-  allocation_horizon: 20             # size positions with the 20-day vol forecast
+  allocation_horizon: 20             # risk horizon used for position sizing
+  # Size with last month's volatility (trailing) or the model's forecast (model). Backtest 2013-2026:
+  # both cut max drawdown by about a third; trailing had equal or better Sharpe, so it's the default.
+  sizing_vol: trailing
   market_ticker: SPY                 # market regime is based on this ticker
 
 backtest:

@@ -54,6 +54,7 @@ class RiskConfig(BaseModel):
     max_weight: float = 1.0  # cap on position size (1.0 = no leverage)
     rebalance_band: float = 0.10  # only trade when the target weight moves by more than this
     allocation_horizon: int = 20  # which vol forecast sizes positions
+    sizing_vol: Literal["trailing", "model"] = "trailing"  # trailing won the 2013-2026 backtest
     market_ticker: str = "SPY"  # ticker used for the market regime
 
 

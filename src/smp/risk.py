@@ -258,3 +258,67 @@ def train_risk_all(cfg: Config) -> dict:
             except Exception as exc:
                 log.error("%s risk %dd: training failed: %s", ticker, h, exc)
     return results
+
+
+def risk_predictions_path(cfg: Config):
+    return cfg.paths.models / "risk_predictions.parquet"
+
+
+def predict_risk_ticker(cfg: Config, ticker: str, feats: pd.DataFrame, horizon: int) -> dict | None:
+    d = risk_dir(cfg, ticker, horizon)
+    if not (d / "metrics.json").exists():
+        return None
+    meta = json.loads((d / "metrics.json").read_text())
+    latest = feats[meta["features"]].dropna().tail(1)
+    if latest.empty:
+        return None
+    vol = float(np.exp(joblib.load(d / "vol.joblib").predict(latest)[0]))
+    p_drop = float(joblib.load(d / "drop.joblib").predict_proba(latest)[0, 1])
+    return {
+        "ticker": ticker,
+        "horizon": horizon,
+        "as_of": latest.index[0],
+        "forecast_vol": vol,
+        "trailing_vol": float(latest["vol_20"].iloc[0] * np.sqrt(TRADING_DAYS)),
+        "p_drop": p_drop,
+        "drop_threshold": meta["drop_threshold"],
+        "vol_model": meta["vol"]["selected"],
+        "drop_model": meta["drop"]["selected"],
+    }
+
+
+def predict_risk_all(cfg: Config) -> pd.DataFrame:
+    """Latest risk forecasts and suggested position size for every ticker."""
+    from smp.allocation import suggested_weight
+
+    if not cfg.risk.enabled:
+        return pd.DataFrame()
+    rows = []
+    for ticker in cfg.data.tickers:
+        p = features_path(cfg, ticker)
+        if not p.exists():
+            continue
+        feats = pd.read_parquet(p)
+        for h in cfg.risk.horizons:
+            if r := predict_risk_ticker(cfg, ticker, feats, h):
+                rows.append(r)
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    alloc = df[df["horizon"] == cfg.risk.allocation_horizon].set_index("ticker")
+    df["suggested_weight"] = df["ticker"].map(
+        {t: suggested_weight(cfg, r.trailing_vol, r.forecast_vol) for t, r in alloc.iterrows()}
+    )
+    df.to_parquet(risk_predictions_path(cfg), index=False)
+    for r in df[df["horizon"] == cfg.risk.allocation_horizon].itertuples():
+        log.info(
+            "%s risk (%dd): forecast vol %.0f%% (trailing %.0f%%), P(-%.0f%%) %.0f%%, suggested weight %.0f%%",
+            r.ticker,
+            r.horizon,
+            r.forecast_vol * 100,
+            r.trailing_vol * 100,
+            r.drop_threshold * 100,
+            r.p_drop * 100,
+            r.suggested_weight * 100,
+        )
+    return df
