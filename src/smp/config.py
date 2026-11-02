@@ -46,6 +46,17 @@ class TrainConfig(BaseModel):
     random_state: int = 42
 
 
+class RiskConfig(BaseModel):
+    enabled: bool = True
+    horizons: list[int] = Field(default_factory=lambda: [5, 20])  # days ahead for risk forecasts
+    drop_threshold: float = 0.05  # a "big drop": close falls this far below today's within the horizon
+    target_vol: float = 0.15  # annualised volatility the allocation aims for
+    max_weight: float = 1.0  # cap on position size (1.0 = no leverage)
+    rebalance_band: float = 0.10  # only trade when the target weight moves by more than this
+    allocation_horizon: int = 20  # which vol forecast sizes positions
+    market_ticker: str = "SPY"  # ticker used for the market regime
+
+
 class BacktestConfig(BaseModel):
     cost: float = 0.001
     prob_threshold: float = 0.5
@@ -68,6 +79,7 @@ class Config(BaseModel):
     data: DataConfig = Field(default_factory=DataConfig)
     train: TrainConfig = Field(default_factory=TrainConfig)
     backtest: BacktestConfig = Field(default_factory=BacktestConfig)
+    risk: RiskConfig = Field(default_factory=RiskConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)
 
 

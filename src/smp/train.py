@@ -178,10 +178,12 @@ def train_ticker(cfg: Config, ticker: str, feats: pd.DataFrame | None = None, ho
 
 
 def train_all(cfg: Config) -> dict:
+    from smp.risk import train_risk_all
+
     if cfg.train.scope == "pooled":
         from smp.pooled import train_all_pooled
 
-        return train_all_pooled(cfg)
+        return {"direction": train_all_pooled(cfg), "risk": train_risk_all(cfg)}
     results = {}
     for ticker in cfg.data.tickers:
         if not features_path(cfg, ticker).exists():
@@ -193,4 +195,4 @@ def train_all(cfg: Config) -> dict:
                 results.setdefault(ticker, {})[h] = train_ticker(cfg, ticker, feats, h)
             except Exception as exc:
                 log.error("%s %dd: training failed: %s", ticker, h, exc)
-    return results
+    return {"direction": results, "risk": train_risk_all(cfg)}

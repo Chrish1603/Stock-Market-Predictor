@@ -25,6 +25,16 @@ def target_return(h: int = 1) -> str:
     return f"target_return_{h}"
 
 
+def target_logvol(h: int) -> str:
+    """Column name of the log annualised realised volatility over the next h days."""
+    return f"target_logvol_{h}"
+
+
+def target_drop(h: int) -> str:
+    """Column name of the 'close falls drop_threshold below today's within h days' label."""
+    return f"target_drop_{h}"
+
+
 def target_direction(h: int = 1) -> str:
     """Column name of the h-day-ahead up (1) / down (0) label."""
     return f"target_direction_{h}"
@@ -67,6 +77,7 @@ def atr(df: pd.DataFrame, n: int = 14) -> pd.Series:
 # --- feature construction ---------------------------------------------------------------------
 
 
+TRADING_DAYS = 252
 RATE_TICKERS = {"tnx", "irx"}  # Treasury yields, quoted in percent
 MAX_DAYS_TO_EARNINGS = 20  # dates are usually announced 2-4 weeks ahead; don't assume more
 MAX_DAYS_SINCE_EARNINGS = 90
@@ -107,6 +118,8 @@ def build_features(
     horizons: list[int] | tuple[int, ...] = (1,),
     sector: pd.DataFrame | None = None,
     earnings: pd.DataFrame | None = None,
+    risk_horizons: list[int] | tuple[int, ...] = (),
+    drop_threshold: float = 0.05,
 ) -> pd.DataFrame:
     """Return a frame of features plus targets for each horizon, indexed like `df`.
 
@@ -136,9 +149,15 @@ def build_features(
     low14, high14 = df["Low"].rolling(14).min(), df["High"].rolling(14).max()
     out["stoch_k"] = (c - low14) / (high14 - low14)
 
-    # Volatility
-    out["vol_20"] = log_ret.rolling(20).std()
-    out["vol_60"] = log_ret.rolling(60).std()
+    # Volatility (daily units)
+    for n in (5, 10, 20, 60):
+        out[f"vol_{n}"] = log_ret.rolling(n).std()
+    out["ewm_vol_20"] = log_ret.ewm(span=20, min_periods=20).std()
+    out["downside_vol_20"] = np.sqrt((log_ret.clip(upper=0) ** 2).rolling(20).mean())
+    hl = np.log(df["High"] / df["Low"]) ** 2
+    out["parkinson_vol_20"] = np.sqrt(hl.rolling(20).mean() / (4 * np.log(2)))  # uses the daily range
+    out["vol_ratio_5_60"] = out["vol_5"] / out["vol_60"]
+    out["drawdown_60"] = c / c.rolling(60).max() - 1
     out["atr_14"] = atr(df, 14) / c
     bb = bollinger(c)
     out["bb_pctb"] = (c - bb["lower"]) / (bb["upper"] - bb["lower"])
@@ -195,6 +214,14 @@ def build_features(
         ret = np.log(c.shift(-h) / c)
         out[target_return(h)] = ret
         out[target_direction(h)] = (ret > 0).astype(float).where(ret.notna())
+
+    # Risk targets: realised volatility and "big drop" over the next h days
+    for h in risk_horizons:
+        fwd_sq = (log_ret**2).rolling(h).sum().shift(-h)  # sum of squared returns t+1 .. t+h
+        out[target_logvol(h)] = 0.5 * np.log(fwd_sq * TRADING_DAYS / h)  # log annualised vol
+        fwd_min = c.shift(-1).rolling(h).min().shift(-(h - 1))  # lowest close t+1 .. t+h
+        out[target_drop(h)] = (fwd_min / c - 1 <= -drop_threshold).astype(float).where(fwd_min.notna())
+    out = out.replace([np.inf, -np.inf], np.nan)
     return out
 
 
@@ -260,7 +287,10 @@ def build_all(cfg: Config) -> dict[str, int]:
             sector = pd.read_parquet(sp)
         ep = earnings_path(cfg, ticker)
         earnings = pd.read_parquet(ep) if cfg.data.earnings and ep.exists() else None
-        feats = build_features(pd.read_parquet(p), market, cfg.train.horizons, sector, earnings)
+        risk_h = cfg.risk.horizons if cfg.risk.enabled else []
+        feats = build_features(
+            pd.read_parquet(p), market, cfg.train.horizons, sector, earnings, risk_h, cfg.risk.drop_threshold
+        )
         frames[ticker] = fill_earnings(feats) if cfg.data.earnings else feats
 
     if cfg.data.cross_sectional and len(frames) >= MIN_TICKERS_FOR_RANKS:

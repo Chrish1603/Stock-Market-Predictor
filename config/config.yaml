@@ -41,6 +41,16 @@ train:
   n_trials: 20
   random_state: 42
 
+risk:                                # volatility / drawdown forecasts and position sizing
+  enabled: true
+  horizons: [5, 20]                  # forecast risk 5 and 20 trading days ahead
+  drop_threshold: 0.05               # "big drop" = close falls 5% below today's within the horizon
+  target_vol: 0.15                   # allocation aims for 15% annualised volatility
+  max_weight: 1.0                    # no leverage
+  rebalance_band: 0.10               # only trade when the target weight moves by more than 10 points
+  allocation_horizon: 20             # size positions with the 20-day vol forecast
+  market_ticker: SPY                 # market regime is based on this ticker
+
 backtest:
   cost: 0.001                        # 0.1% cost per position change
   prob_threshold: 0.5                # classifier: go long when P(up) > threshold
