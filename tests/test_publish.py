@@ -57,3 +57,23 @@ def test_summary_changes_and_render():
     assert "AAA: hold 50%, vol 30% (well above normal), 40% chance of a 5% drop, earnings in 2d" in text
     assert "### " in md and "not financial advice" in md
     assert changes(now, None) == []
+
+
+def test_project_root_found_without_a_source_checkout(tmp_path, monkeypatch):
+    """A regular (non-editable) install, as on Streamlit Cloud, must still find config/config.yaml."""
+    import smp.config as config
+
+    repo = tmp_path / "repo"
+    (repo / "config").mkdir(parents=True)
+    (repo / "config" / "config.yaml").write_text("{}")
+    (repo / "app").mkdir()
+    fake_install = tmp_path / "venv" / "site-packages" / "smp" / "config.py"
+    monkeypatch.setattr(config, "__file__", str(fake_install))
+    monkeypatch.delenv("SMP_PROJECT_ROOT", raising=False)
+
+    monkeypatch.chdir(repo / "app")  # found by walking up from the current folder
+    assert config.find_project_root() == repo.resolve()
+
+    monkeypatch.chdir(tmp_path)  # or given explicitly
+    monkeypatch.setenv("SMP_PROJECT_ROOT", str(repo))
+    assert config.find_project_root() == repo.resolve()

@@ -1,2 +1,2 @@
-# For Streamlit Community Cloud: installs this package and its dependencies (see pyproject.toml).
-.
+# For Streamlit Community Cloud: installs this package (editable, like a local checkout) and its dependencies.
+-e .

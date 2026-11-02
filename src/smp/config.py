@@ -9,8 +9,29 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CONFIG = PROJECT_ROOT / "config" / "config.yaml"
+CONFIG_RELPATH = Path("config") / "config.yaml"
+
+
+def find_project_root() -> Path:
+    """The folder holding config/config.yaml.
+
+    Order: SMP_PROJECT_ROOT, then the source checkout this package lives in (editable install), then the
+    current folder and its parents (a regular install run from the repo, e.g. on Streamlit Cloud).
+    """
+    if env := os.environ.get("SMP_PROJECT_ROOT"):
+        return Path(env).resolve()
+    source = Path(__file__).resolve().parents[2]
+    if (source / CONFIG_RELPATH).exists():
+        return source
+    cwd = Path.cwd().resolve()
+    for folder in (cwd, *cwd.parents):
+        if (folder / CONFIG_RELPATH).exists():
+            return folder
+    return source
+
+
+PROJECT_ROOT = find_project_root()
+DEFAULT_CONFIG = PROJECT_ROOT / CONFIG_RELPATH
 
 
 class DataConfig(BaseModel):

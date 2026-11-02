@@ -18,16 +18,20 @@ import streamlit as st
 from plotly.subplots import make_subplots
 from sklearn.metrics import confusion_matrix, roc_curve
 
-from smp import pipeline
-from smp.allocation import allocation_path
-from smp.clean import clean_path, report_path
-from smp.config import load_config
-from smp.features import bollinger, features_path, macd, rsi
-from smp.history import load_history, summarize
-from smp.predict import predictions_path
-from smp.regime import market_dir
-from smp.risk import risk_dir, risk_predictions_path
-from smp.train import model_dir
+# The repo root is the folder above app/. Set it before importing smp, which reads it at import time
+# (needed when smp is installed as a regular package, as on Streamlit Cloud).
+os.environ.setdefault("SMP_PROJECT_ROOT", str(Path(__file__).resolve().parents[1]))
+
+from smp import pipeline  # noqa: E402
+from smp.allocation import allocation_path  # noqa: E402
+from smp.clean import clean_path, report_path  # noqa: E402
+from smp.config import load_config  # noqa: E402
+from smp.features import bollinger, features_path, macd, rsi  # noqa: E402
+from smp.history import load_history, summarize  # noqa: E402
+from smp.predict import predictions_path  # noqa: E402
+from smp.regime import market_dir  # noqa: E402
+from smp.risk import risk_dir, risk_predictions_path  # noqa: E402
+from smp.train import model_dir  # noqa: E402
 
 st.set_page_config(page_title="Stock Market Predictor", layout="wide")
 
