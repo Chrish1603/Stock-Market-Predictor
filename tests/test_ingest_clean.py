@@ -34,9 +34,9 @@ def test_clean_removes_duplicates_and_sorts(ohlcv):
 
 def test_clean_fills_small_gaps_and_drops_large(ohlcv):
     df = ohlcv.iloc[:50].copy()
-    df.iloc[10, df.columns.get_loc("Close")] = np.nan           # single gap -> filled
-    df.iloc[20:25, df.columns.get_loc("Close")] = np.nan        # 5-row gap -> 3 rows dropped
-    df.iloc[30, df.columns.get_loc("Open")] = -1.0              # invalid price -> filled
+    df.iloc[10, df.columns.get_loc("Close")] = np.nan  # single gap -> filled
+    df.iloc[20:25, df.columns.get_loc("Close")] = np.nan  # 5-row gap -> 3 rows dropped
+    df.iloc[30, df.columns.get_loc("Open")] = -1.0  # invalid price -> filled
     out, rep = clean_ohlcv(df, ffill_limit=2)
     assert out[["Open", "High", "Low", "Close"]].notna().all().all()
     assert rep["rows_dropped"] == 3
@@ -46,8 +46,8 @@ def test_clean_fills_small_gaps_and_drops_large(ohlcv):
 
 def test_clean_fixes_ohlc_and_flags_outliers(ohlcv):
     df = ohlcv.copy()
-    df.iloc[5, df.columns.get_loc("High")] = df["Low"].iloc[5] * 0.5   # High below Low
-    df.iloc[300:, :4] *= 3.0                                           # huge one-day jump
+    df.iloc[5, df.columns.get_loc("High")] = df["Low"].iloc[5] * 0.5  # High below Low
+    df.iloc[300:, :4] *= 3.0  # huge one-day jump
     out, rep = clean_ohlcv(df)
     assert (out["High"] >= out[["Open", "Close", "Low"]].max(axis=1)).all()
     assert (out["Low"] <= out[["Open", "Close", "High"]].min(axis=1)).all()

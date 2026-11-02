@@ -5,8 +5,15 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
-    accuracy_score, f1_score, log_loss, mean_absolute_error, mean_squared_error,
-    precision_score, r2_score, recall_score, roc_auc_score,
+    accuracy_score,
+    f1_score,
+    log_loss,
+    mean_absolute_error,
+    mean_squared_error,
+    precision_score,
+    r2_score,
+    recall_score,
+    roc_auc_score,
 )
 
 TRADING_DAYS = 252
@@ -48,13 +55,15 @@ def backtest(log_returns: pd.Series, signal: pd.Series, cost: float = 0.001) -> 
     asset = np.expm1(log_returns)
     trades = signal.diff().abs().fillna(signal.iloc[0])
     strat = signal * asset - trades * cost
-    return pd.DataFrame({
-        "position": signal,
-        "strategy_return": strat,
-        "buy_hold_return": asset,
-        "strategy_equity": (1 + strat).cumprod(),
-        "buy_hold_equity": (1 + asset).cumprod(),
-    })
+    return pd.DataFrame(
+        {
+            "position": signal,
+            "strategy_return": strat,
+            "buy_hold_return": asset,
+            "strategy_equity": (1 + strat).cumprod(),
+            "buy_hold_equity": (1 + asset).cumprod(),
+        }
+    )
 
 
 def _max_drawdown(equity: pd.Series) -> float:

@@ -93,8 +93,12 @@ def clean_all(cfg: Config) -> dict[str, dict]:
         reports[ticker] = rep
         log.info(
             "%s: %d rows clean (dropped %d, filled %d, ohlc fixed %d, outliers %d)",
-            ticker, rep["rows_out"], rep["rows_dropped"], rep["missing_values_filled"],
-            rep["ohlc_fixed"], len(rep["outlier_dates"]),
+            ticker,
+            rep["rows_out"],
+            rep["rows_dropped"],
+            rep["missing_values_filled"],
+            rep["ohlc_fixed"],
+            len(rep["outlier_dates"]),
         )
     report_path(cfg).write_text(json.dumps(reports, indent=2))
     return reports

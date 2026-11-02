@@ -14,7 +14,7 @@ from smp.config import Config, ticker_to_filename
 log = logging.getLogger(__name__)
 
 OHLCV = ["Open", "High", "Low", "Close", "Volume"]
-OVERLAP_DAYS = 5          # re-fetch a few recent days to catch late revisions
+OVERLAP_DAYS = 5  # re-fetch a few recent days to catch late revisions
 ADJUSTMENT_TOLERANCE = 0.005  # >0.5% change in stored closes => prices were re-adjusted
 
 

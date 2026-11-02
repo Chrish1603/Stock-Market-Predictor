@@ -54,6 +54,9 @@ def predict_all(cfg: Config) -> pd.DataFrame:
     for r in rows:
         log.info(
             "%s (as of %s): P(up)=%.3f, predicted return=%+.4f%%",
-            r["ticker"], r["as_of"].date(), r["p_up"], r["pred_return"] * 100,
+            r["ticker"],
+            r["as_of"].date(),
+            r["p_up"],
+            r["pred_return"] * 100,
         )
     return df

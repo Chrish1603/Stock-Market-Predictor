@@ -40,8 +40,7 @@ def _score(task: str, y, pred) -> dict[str, float]:
 def cross_validate(model, task: str, X: pd.DataFrame, y: pd.Series, splits) -> dict[str, float]:
     """Mean metrics across walk-forward folds."""
     fold_scores = [
-        _score(task, y.iloc[te], _fit_predict(model, task, X.iloc[tr], y.iloc[tr], X.iloc[te]))
-        for tr, te in splits
+        _score(task, y.iloc[te], _fit_predict(model, task, X.iloc[tr], y.iloc[tr], X.iloc[te])) for tr, te in splits
     ]
     return {k: float(np.nanmean([s[k] for s in fold_scores])) for k in fold_scores[0]}
 
@@ -95,7 +94,9 @@ def train_ticker(cfg: Config, ticker: str, feats: pd.DataFrame | None = None) ->
     out_dir.mkdir(parents=True, exist_ok=True)
 
     metrics: dict = {
-        "ticker": ticker, "features": cols, "n_rows": len(data),
+        "ticker": ticker,
+        "features": cols,
+        "n_rows": len(data),
         "dev_period": [str(dev.index[0].date()), str(dev.index[-1].date())],
         "holdout_period": [str(hold.index[0].date()), str(hold.index[-1].date())],
     }
@@ -118,14 +119,21 @@ def train_ticker(cfg: Config, ticker: str, feats: pd.DataFrame | None = None) ->
         metric, higher = SELECTION[task]
         ranked = sorted(
             (n for n in candidates if n != BASELINE),
-            key=lambda n: cv[n][metric], reverse=higher,
+            key=lambda n: cv[n][metric],
+            reverse=higher,
         )
         best = ranked[0]
         base_cv = cv[BASELINE][metric]
         beats = cv[best][metric] > base_cv if higher else cv[best][metric] < base_cv
         log.info(
             "%s %s: selected %s (CV %s=%.4f vs baseline %.4f; hold-out %.4f)",
-            ticker, task, best, metric, cv[best][metric], base_cv, hold_scores[best][metric],
+            ticker,
+            task,
+            best,
+            metric,
+            cv[best][metric],
+            base_cv,
+            hold_scores[best][metric],
         )
 
         # Final model is refit on all labelled data for live predictions.

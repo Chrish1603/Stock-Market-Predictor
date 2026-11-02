@@ -46,7 +46,7 @@ class PathsConfig(BaseModel):
     models: Path = Path("models")
     logs: Path = Path("logs")
 
-    def resolve(self, root: Path) -> "PathsConfig":
+    def resolve(self, root: Path) -> PathsConfig:
         """Make every relative path absolute against `root`."""
         return PathsConfig(**{k: (v if v.is_absolute() else root / v) for k, v in self})
 

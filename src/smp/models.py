@@ -12,12 +12,25 @@ from xgboost import XGBClassifier, XGBRegressor
 BASELINE = "baseline"
 
 LGBM_DEFAULTS = dict(
-    n_estimators=300, learning_rate=0.02, num_leaves=15, min_child_samples=50,
-    subsample=0.8, subsample_freq=1, colsample_bytree=0.8, reg_lambda=1.0, verbose=-1,
+    n_estimators=300,
+    learning_rate=0.02,
+    num_leaves=15,
+    min_child_samples=50,
+    subsample=0.8,
+    subsample_freq=1,
+    colsample_bytree=0.8,
+    reg_lambda=1.0,
+    verbose=-1,
 )
 XGB_DEFAULTS = dict(
-    n_estimators=300, learning_rate=0.02, max_depth=3, min_child_weight=5,
-    subsample=0.8, colsample_bytree=0.8, reg_lambda=1.0, n_jobs=-1,
+    n_estimators=300,
+    learning_rate=0.02,
+    max_depth=3,
+    min_child_weight=5,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    reg_lambda=1.0,
+    n_jobs=-1,
 )
 
 
@@ -25,10 +38,12 @@ def classifiers(random_state: int = 42, lgbm_params: dict | None = None) -> dict
     """Candidates for next-day direction. Scaling sits inside the pipeline so it's fit per fold."""
     return {
         BASELINE: DummyClassifier(strategy="most_frequent"),
-        "logistic": Pipeline([
-            ("scale", StandardScaler()),
-            ("model", LogisticRegression(C=0.1, max_iter=2000)),
-        ]),
+        "logistic": Pipeline(
+            [
+                ("scale", StandardScaler()),
+                ("model", LogisticRegression(C=0.1, max_iter=2000)),
+            ]
+        ),
         "lightgbm": LGBMClassifier(**{**LGBM_DEFAULTS, **(lgbm_params or {})}, random_state=random_state),
         "xgboost": XGBClassifier(**XGB_DEFAULTS, eval_metric="logloss", random_state=random_state),
     }
@@ -54,5 +69,5 @@ def feature_importance(model, columns: list[str]) -> dict[str, float]:
     else:
         return {}
     total = float(sum(values)) or 1.0
-    pairs = sorted(zip(columns, values), key=lambda p: -p[1])
+    pairs = sorted(zip(columns, values, strict=False), key=lambda p: -p[1])
     return {name: float(v) / total for name, v in pairs}

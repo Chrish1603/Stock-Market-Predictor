@@ -13,7 +13,7 @@ def test_walk_forward_splits_are_time_ordered():
     splits = walk_forward_splits(1000, n_splits=5, gap=1)
     assert len(splits) == 5
     for tr, te in splits:
-        assert tr.max() + 1 < te.min()      # gap respected, no overlap
+        assert tr.max() + 1 < te.min()  # gap respected, no overlap
         assert np.all(np.diff(te) == 1)
     assert splits[0][0].size < splits[-1][0].size  # expanding window
 
@@ -46,10 +46,21 @@ def test_train_ticker_end_to_end(tmp_path):
     m = train_ticker(cfg, "TEST", feats)
     for task in ("classifier", "regressor"):
         assert m[task]["selected"] != "baseline"
-        assert set(m[task]["cv"]) == {"baseline", "logistic" if task == "classifier" else "ridge", "lightgbm", "xgboost"}
+        assert set(m[task]["cv"]) == {
+            "baseline",
+            "logistic" if task == "classifier" else "ridge",
+            "lightgbm",
+            "xgboost",
+        }
     out = tmp_path / "models" / "TEST"
-    for f in ("classifier.joblib", "regressor.joblib", "metrics.json", "holdout_predictions.parquet",
-              "backtest_classifier.parquet", "backtest_regressor.parquet"):
+    for f in (
+        "classifier.joblib",
+        "regressor.joblib",
+        "metrics.json",
+        "holdout_predictions.parquet",
+        "backtest_classifier.parquet",
+        "backtest_regressor.parquet",
+    ):
         assert (out / f).exists()
     # Random-walk data is unpredictable: a much-better-than-chance AUC would mean leakage.
     assert m["classifier"]["holdout"][m["classifier"]["selected"]]["roc_auc"] < 0.65

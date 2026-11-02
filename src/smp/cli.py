@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -14,7 +13,7 @@ app = typer.Typer(help="Stock Market Predictor pipeline.", no_args_is_help=True)
 ConfigOpt = typer.Option(None, "--config", "-c", help="Path to config YAML.")
 
 
-def _cfg(config: Optional[Path], tune: bool = False):
+def _cfg(config: Path | None, tune: bool = False):
     cfg = load_config(config)
     if tune:
         cfg.train.tune = True
@@ -23,38 +22,38 @@ def _cfg(config: Optional[Path], tune: bool = False):
 
 
 @app.command()
-def ingest(config: Optional[Path] = ConfigOpt):
+def ingest(config: Path | None = ConfigOpt):
     """Download or update raw market data."""
     pipeline.run(_cfg(config), ["ingest"])
 
 
 @app.command()
-def clean(config: Optional[Path] = ConfigOpt):
+def clean(config: Path | None = ConfigOpt):
     """Validate and clean raw data."""
     pipeline.run(_cfg(config), ["clean"])
 
 
 @app.command()
-def features(config: Optional[Path] = ConfigOpt):
+def features(config: Path | None = ConfigOpt):
     """Build features and targets."""
     pipeline.run(_cfg(config), ["features"])
 
 
 @app.command()
-def train(config: Optional[Path] = ConfigOpt, tune: bool = typer.Option(False, help="Tune LightGBM with Optuna.")):
+def train(config: Path | None = ConfigOpt, tune: bool = typer.Option(False, help="Tune LightGBM with Optuna.")):
     """Train and evaluate models."""
     pipeline.run(_cfg(config, tune), ["train"])
 
 
 @app.command()
-def predict(config: Optional[Path] = ConfigOpt):
+def predict(config: Path | None = ConfigOpt):
     """Write the latest next-day predictions."""
     pipeline.run(_cfg(config), ["predict"])
 
 
 @app.command("run-all")
 def run_all(
-    config: Optional[Path] = ConfigOpt,
+    config: Path | None = ConfigOpt,
     tune: bool = typer.Option(False, help="Tune LightGBM with Optuna."),
     skip_ingest: bool = typer.Option(False, help="Use existing raw data."),
     skip_train: bool = typer.Option(False, help="Reuse existing models."),

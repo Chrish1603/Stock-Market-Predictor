@@ -23,6 +23,7 @@ TARGETS = [TARGET_RETURN, TARGET_DIRECTION]
 
 # --- indicator helpers (also used by the dashboard) -------------------------------------------
 
+
 def rsi(close: pd.Series, n: int = 14) -> pd.Series:
     """Wilder's relative strength index, 0-100."""
     delta = close.diff()
@@ -55,6 +56,7 @@ def atr(df: pd.DataFrame, n: int = 14) -> pd.Series:
 
 
 # --- feature construction ---------------------------------------------------------------------
+
 
 def build_features(df: pd.DataFrame, market: dict[str, pd.DataFrame] | None = None) -> pd.DataFrame:
     """Return a frame of features plus the two targets, indexed like `df`."""
