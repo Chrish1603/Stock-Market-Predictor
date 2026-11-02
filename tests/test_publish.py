@@ -38,3 +38,22 @@ def test_snapshot_has_what_the_dashboard_needs(tmp_path):
     assert (out / "data" / "history" / "predictions.parquet").exists()
     slim = pd.read_parquet(out / "data" / "processed" / "features" / "AAA.parquet")
     assert set(slim.columns) <= set(DASHBOARD_FEATURES) and "vol_20" in slim
+
+
+def test_summary_changes_and_render():
+    from smp.notify import changes, render
+
+    before = {"regime": "normal", "stocks": [{"ticker": "AAA", "weight": 0.80}]}
+    now = {
+        "as_of": "2026-01-02",
+        "regime": "stressed",
+        "market_vol": 0.28,
+        "stocks": [{"ticker": "AAA", "weight": 0.50, "vol": 0.30, "vol_pct": 0.9, "p_drop": 0.4, "earnings_in": 2}],
+    }
+    diff = changes(now, before)
+    assert diff == ["Market regime changed: normal → stressed", "AAA holding 80% → 50%"]
+    title, text, md = render(now, diff)
+    assert title.startswith("Market regime changed")
+    assert "AAA: hold 50%, vol 30% (well above normal), 40% chance of a 5% drop, earnings in 2d" in text
+    assert "### " in md and "not financial advice" in md
+    assert changes(now, None) == []

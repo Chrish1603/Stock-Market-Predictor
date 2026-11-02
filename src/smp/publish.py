@@ -41,6 +41,7 @@ def build_snapshot(cfg: Config, out: Path, root: Path) -> dict:
         shutil.rmtree(out)
     out.mkdir(parents=True)
     files: list[Path] = [report_path(cfg), history_path(cfg)]
+    files += [f for f in cfg.paths.history.glob("*") if f.is_file() and f != history_path(cfg)]
     files += [clean_path(cfg, t) for t in dict.fromkeys(cfg.data.tickers + cfg.data.market_tickers)]
     files += [f for f in cfg.paths.models.rglob("*") if f.is_file() and f.suffix in {".json", ".parquet"}]
     size = sum(_copy(f, root, out) for f in files)

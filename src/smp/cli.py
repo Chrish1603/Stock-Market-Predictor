@@ -74,6 +74,13 @@ def run_all(
     pipeline.run_all(_cfg(config, tune), skip_ingest=skip_ingest, skip_train=skip_train)
 
 
+@app.command("notify")
+def notify_cmd(config: Path | None = ConfigOpt):
+    """Build today's summary and send it (macOS / ntfy, if configured)."""
+    pipeline.run(_cfg(config), ["notify"])
+    typer.echo((load_config(config).paths.logs / "summary.md").read_text())
+
+
 @app.command()
 def publish(
     out: Path = typer.Option(Path("site-data"), help="Folder to write the dashboard snapshot to."),

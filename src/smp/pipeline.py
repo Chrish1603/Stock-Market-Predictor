@@ -10,6 +10,7 @@ from smp.clean import clean_all
 from smp.config import Config
 from smp.features import build_all
 from smp.ingest import ingest_all
+from smp.notify import notify
 from smp.predict import predict_all
 from smp.train import train_all
 
@@ -21,6 +22,7 @@ STAGES = {
     "features": build_all,
     "train": train_all,
     "predict": predict_all,
+    "notify": notify,
 }
 
 

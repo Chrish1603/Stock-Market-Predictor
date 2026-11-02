@@ -72,5 +72,5 @@ dashboard:
   data_url: https://github.com/Chrish1603/Stock-Market-Predictor/archive/refs/heads/dashboard-data.tar.gz
 
 notify:
-  macos: false                       # desktop notification after each local run
+  macos: true                        # desktop notification after each local run (skipped off macOS)
   ntfy_topic: null                   # set to a private topic name to get phone pushes via ntfy.sh
