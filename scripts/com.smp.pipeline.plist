@@ -1,25 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- macOS launchd job: runs the pipeline Mon-Fri at 22:30 local time.
-     Edit the path below, then:
-       cp scripts/com.smp.pipeline.plist ~/Library/LaunchAgents/
-       launchctl load ~/Library/LaunchAgents/com.smp.pipeline.plist -->
+<!-- macOS launchd job for the daily pipeline.
+     Set the times for your time zone so it runs after 16:30 New York time on US trading days.
+     This copy: 11:00 Tue-Sat New Zealand time (after the Mon-Fri US close, all year).
+     If the project lives elsewhere, update the three paths below.
+     Install:   cp scripts/com.smp.pipeline.plist ~/Library/LaunchAgents/
+                launchctl load ~/Library/LaunchAgents/com.smp.pipeline.plist
+     Run now:   launchctl kickstart gui/$(id -u)/com.smp.pipeline
+     Remove:    launchctl unload ~/Library/LaunchAgents/com.smp.pipeline.plist
+     If the Mac is asleep at the scheduled time, launchd runs the job when it wakes. -->
 <plist version="1.0">
 <dict>
   <key>Label</key><string>com.smp.pipeline</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/Users/YOU/Documents/Stock-Market-Predictor/scripts/run_pipeline.sh</string>
+    <string>/bin/bash</string>
+    <string>/Users/chrish/Documents/Stock-Market-Predictor/scripts/run_pipeline.sh</string>
   </array>
   <key>StartCalendarInterval</key>
   <array>
-    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>22</integer><key>Minute</key><integer>30</integer></dict>
-    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>22</integer><key>Minute</key><integer>30</integer></dict>
-    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>22</integer><key>Minute</key><integer>30</integer></dict>
-    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>22</integer><key>Minute</key><integer>30</integer></dict>
-    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>22</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>11</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>11</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>11</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>11</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>6</integer><key>Hour</key><integer>11</integer><key>Minute</key><integer>0</integer></dict>
   </array>
-  <key>StandardOutPath</key><string>/tmp/smp-pipeline.out</string>
-  <key>StandardErrorPath</key><string>/tmp/smp-pipeline.err</string>
+  <key>StandardOutPath</key><string>/Users/chrish/Documents/Stock-Market-Predictor/logs/launchd.out</string>
+  <key>StandardErrorPath</key><string>/Users/chrish/Documents/Stock-Market-Predictor/logs/launchd.err</string>
 </dict>
 </plist>
