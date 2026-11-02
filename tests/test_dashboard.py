@@ -19,3 +19,17 @@ def test_dashboard_renders():
         for task in ("classifier", "regressor"):
             model_radio.set_value(task).run()
             assert not at.exception, (h, task, at.exception)
+
+
+def test_risk_tab_renders():
+    cfg = load_config()
+    if not (cfg.paths.models / "risk_predictions.parquet").exists():
+        pytest.skip("run `smp run-all` first")
+    from streamlit.testing.v1 import AppTest
+
+    at = AppTest.from_file("../app/dashboard.py", default_timeout=90).run()
+    risk = next(t for t in at.tabs if t.label == "Risk & allocation")
+    for h in cfg.risk.horizons:
+        risk.radio[0].set_value(h).run()
+        assert not at.exception, (h, at.exception)
+    assert len(risk.metric) == len(cfg.data.tickers)

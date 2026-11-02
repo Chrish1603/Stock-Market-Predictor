@@ -7,6 +7,7 @@ Reads pipeline outputs only; training happens in the pipeline (`smp run-all`).
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -16,11 +17,14 @@ from plotly.subplots import make_subplots
 from sklearn.metrics import confusion_matrix, roc_curve
 
 from smp import pipeline
+from smp.allocation import allocation_path
 from smp.clean import clean_path, report_path
 from smp.config import load_config
 from smp.features import bollinger, macd, rsi
 from smp.history import load_history, summarize
 from smp.predict import predictions_path
+from smp.regime import market_dir
+from smp.risk import risk_dir, risk_predictions_path
 from smp.train import model_dir
 
 st.set_page_config(page_title="Stock Market Predictor", layout="wide")
@@ -54,6 +58,12 @@ PALETTES = {
 theme_type = getattr(getattr(st.context, "theme", None), "type", None) or "light"
 C = PALETTES["dark" if theme_type == "dark" else "light"]
 FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif'
+# Status colours are reserved for regime state and always shown with an icon + label.
+REGIME_STYLE = {
+    "calm": ("#0ca30c", "●", "Calm"),
+    "normal": (C["muted"], "◐", "Normal"),
+    "stressed": ("#d03b3b", "▲", "Stressed"),
+}
 
 
 def style(fig: go.Figure, height: int = 420) -> go.Figure:
@@ -106,6 +116,18 @@ def load_track_record() -> pd.DataFrame:
 
 
 @st.cache_data
+def load_json(path: str) -> dict | None:
+    p = Path(path)
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+@st.cache_data
+def load_parquet(path: str) -> pd.DataFrame | None:
+    p = Path(path)
+    return pd.read_parquet(p) if p.exists() else None
+
+
+@st.cache_data
 def load_quality() -> dict:
     p = report_path(CFG)
     return json.loads(p.read_text()) if p.exists() else {}
@@ -142,8 +164,16 @@ if prices is None:
     st.warning("No data yet. Run `smp run-all` first.")
     st.stop()
 
-tab_overview, tab_track, tab_price, tab_model, tab_bt, tab_quality = st.tabs(
-    ["Overview", "Track record", "Price & indicators", "Model performance", "Backtest", "Data quality"]
+tab_overview, tab_risk, tab_track, tab_price, tab_model, tab_bt, tab_quality = st.tabs(
+    [
+        "Overview",
+        "Risk & allocation",
+        "Track record",
+        "Price & indicators",
+        "Model performance",
+        "Backtest",
+        "Data quality",
+    ]
 )
 
 # --- overview ----------------------------------------------------------------------------------
@@ -177,6 +207,189 @@ with tab_overview:
             "Stock moves are mostly noise, especially day to day. Hold-out ROC-AUC near 0.5 is normal; "
             "check the Model performance tab before trusting any signal."
         )
+
+# --- risk & allocation -------------------------------------------------------------------------
+
+STRATEGY_LABELS = {
+    "buy_hold": "Buy & hold",
+    "trailing_vol_target": "Vol target (trailing vol)",
+    "model_vol_target": "Vol target (model forecast)",
+    "model_vol_target_drop_filter": "Vol target + drop filter",
+}
+SHOWN_STRATEGIES = ["buy_hold", "trailing_vol_target", "model_vol_target"]
+
+with tab_risk:
+    rc = CFG.risk
+    regime = load_json(str(market_dir(CFG) / "regime.json"))
+    rpreds = load_parquet(str(risk_predictions_path(CFG)))
+    if not rc.enabled or rpreds is None:
+        st.info("No risk forecasts yet. Run `smp run-all`.")
+    else:
+        # Market regime
+        if regime:
+            color, icon, label = REGIME_STYLE[regime["regime"]]
+            left, right = st.columns([1, 2])
+            left.markdown(
+                f"<div style='font-size:0.9rem;color:{C['muted']}'>Market regime ({regime['ticker']}, "
+                f"{regime['as_of']})</div><div style='font-size:2.2rem;font-weight:600'>"
+                f"<span style='color:{color}'>{icon}</span> {label}</div>",
+                unsafe_allow_html=True,
+            )
+            breadth = f"{regime['breadth']:.0%}" if regime["breadth"] is not None else "n/a"
+            right.markdown(
+                f"- 20-day vol forecast **{regime['forecast_vol']:.0%}**, higher than "
+                f"**{regime['vol_percentile']:.0%}** of past days\n"
+                f"- Breadth: **{breadth}** of stocks above their 200-day average\n"
+                f"- Trend: {regime['ticker']} is **{'above' if regime['trend_up'] else 'below'}** its 200-day average"
+            )
+            st.caption(
+                "Stressed = vol forecast in its top 20%, or weak breadth in a downtrend. Calm = vol in its bottom 40% "
+                "with healthy breadth in an uptrend. A risk signal, not a sell signal: returns after stressed days "
+                "were on average higher (rebounds), but swings were much larger."
+            )
+
+        # Risk forecasts per ticker
+        st.subheader("Risk forecasts")
+        rh = st.radio(
+            "Risk horizon",
+            rc.horizons,
+            index=len(rc.horizons) - 1,
+            horizontal=True,
+            format_func=lambda h: f"{h} trading days",
+        )
+        rp = rpreds[rpreds["horizon"] == rh].set_index("ticker")
+        cols = st.columns(len(rp))
+        for col, (t, r) in zip(cols, rp.iterrows(), strict=False):
+            col.metric(
+                t,
+                f"{r.forecast_vol:.0%} vol",
+                f"{r.forecast_vol - r.trailing_vol:+.0%} vs last month",
+                delta_color="inverse",
+            )
+            col.caption(f"{r.p_drop:.0%} chance of a {r.drop_threshold:.0%} drop · hold **{r.suggested_weight:.0%}**")
+        st.caption(
+            f"Volatility is annualised. Suggested holding = {rc.target_vol:.0%} target vol ÷ "
+            f"{'last month' if rc.sizing_vol == 'trailing' else 'forecast'}'s vol, capped at {rc.max_weight:.0%} "
+            f"(based on the {rc.allocation_horizon}-day horizon)."
+        )
+
+        # Forecast vs realised volatility (out of sample)
+        oos_parts = [
+            load_parquet(str(risk_dir(CFG, ticker, rh) / f))
+            for f in ("oos_predictions.parquet", "holdout_predictions.parquet")
+        ]
+        rmeta = load_json(str(risk_dir(CFG, ticker, rh) / "metrics.json"))
+        if all(x is not None for x in oos_parts) and rmeta:
+            oos = pd.concat(oos_parts).sort_index()
+            oos = oos[~oos.index.duplicated(keep="last")]
+            vm = rmeta["vol"]
+            fig = go.Figure()
+            for col, name, color, width in (
+                ("actual_logvol", "Realised (what happened)", C["muted"], 1),
+                ("trailing_logvol", "Last month's vol", C["s2"], 2),
+                ("pred_logvol", f"Forecast ({vm['selected']})", C["s1"], 2),
+            ):
+                fig.add_trace(
+                    go.Scatter(x=oos.index, y=np.exp(oos[col]), name=name, line=dict(color=color, width=width))
+                )
+            fig.update_layout(title=f"{ticker}: {rh}-day volatility forecast vs what happened (out of sample)")
+            fig.update_yaxes(tickformat=".0%")
+            show(style(fig, height=380))
+            sel = vm["selected"]
+            st.caption(
+                f"Walk-forward CV R² on log volatility: forecast {vm['cv'][sel]['r2']:.2f}, HAR "
+                f"{vm['cv']['har']['r2']:.2f}, last month's vol {vm['cv']['persistence']['r2']:.2f}. "
+                f"Average error {vm['cv'][sel]['mae_vol_points']:.1%} points."
+            )
+
+        # Allocation backtest
+        st.subheader("Volatility-targeted allocation, 2013 to today (out of sample)")
+        port_ok = (CFG.paths.models / "_portfolio" / "allocation" / "stats.json").exists()
+        choice = st.radio(
+            "Show", ([f"All {len(CFG.data.tickers)} (equal weight)"] if port_ok else []) + [ticker], horizontal=True
+        )
+        base = CFG.paths.models / "_portfolio" / "allocation" if choice != ticker else allocation_path(CFG, ticker)
+        curves, stats = load_parquet(str(base / "curves.parquet")), load_json(str(base / "stats.json"))
+        if curves is None or stats is None:
+            st.info("No allocation backtest yet. Run `smp train`.")
+        else:
+            eq = go.Figure()
+            dd = go.Figure()
+            for s, color in zip(SHOWN_STRATEGIES, (C["s2"], C["s1"], C["s3"]), strict=True):
+                e = curves[f"{s}_equity"]
+                eq.add_trace(go.Scatter(x=e.index, y=e, name=STRATEGY_LABELS[s], line=dict(color=color, width=2)))
+                dd.add_trace(
+                    go.Scatter(
+                        x=e.index, y=e / e.cummax() - 1, name=STRATEGY_LABELS[s], line=dict(color=color, width=2)
+                    )
+                )
+            eq.update_layout(title="Growth of $1 (log scale)")
+            eq.update_yaxes(type="log", tickprefix="$")
+            dd.update_layout(title="Drawdown from peak")
+            dd.update_yaxes(tickformat=".0%")
+            show(style(eq, height=380))
+            show(style(dd, height=280))
+            table = pd.DataFrame({STRATEGY_LABELS[s]: stats[s] for s in STRATEGY_LABELS if s in stats}).T
+            table = table[["cagr", "volatility", "sharpe", "max_drawdown", "calmar", "avg_weight", "turnover_per_year"]]
+            table.columns = ["CAGR", "Volatility", "Sharpe", "Max drawdown", "Calmar", "Avg invested", "Turnover/yr"]
+            st.dataframe(
+                table.style.format(
+                    {
+                        "CAGR": "{:.1%}",
+                        "Volatility": "{:.1%}",
+                        "Sharpe": "{:.2f}",
+                        "Max drawdown": "{:.1%}",
+                        "Calmar": "{:.2f}",
+                        "Avg invested": "{:.0%}",
+                        "Turnover/yr": "{:.1f}",
+                    }
+                ),
+                width="stretch",
+            )
+            st.caption(
+                "Uses only forecasts made before each day (walk-forward folds, then the hold-out year), "
+                f"{CFG.backtest.cost:.1%} cost per unit traded, no leverage. Vol targeting holds cash part of the "
+                "time, so it gives up return in strong bull markets in exchange for much smaller drawdowns."
+            )
+
+        # Regime history
+        rhist = load_parquet(str(market_dir(CFG) / "regime_history.parquet"))
+        rval = load_json(str(market_dir(CFG) / "regime_validation.json"))
+        mkt_prices = load_prices(CFG.risk.market_ticker)
+        if rhist is not None and rval and mkt_prices is not None:
+            st.subheader("Regime history (out of sample)")
+            h = rhist.dropna(subset=["regime"])
+            px_m = mkt_prices["Close"].reindex(h.index)
+            fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.85, 0.15], vertical_spacing=0.03)
+            fig.add_trace(
+                go.Scatter(x=px_m.index, y=px_m, name=CFG.risk.market_ticker, line=dict(color=C["s1"], width=2)), 1, 1
+            )
+            codes = h["regime"].map({r: i for i, r in enumerate(REGIME_STYLE)})
+            scale = [[i / 2, REGIME_STYLE[r][0]] for i, r in enumerate(REGIME_STYLE)]
+            fig.add_trace(
+                go.Heatmap(
+                    x=h.index,
+                    y=["Regime"],
+                    z=[codes.to_numpy()],
+                    text=[h["regime"].to_numpy()],
+                    colorscale=scale,
+                    zmin=0,
+                    zmax=2,
+                    showscale=False,
+                    hovertemplate="%{x|%d %b %Y}: %{text}<extra></extra>",
+                ),
+                2,
+                1,
+            )
+            fig.update_layout(
+                title=f"{CFG.risk.market_ticker} with each day's regime (green ● calm, grey ◐ normal, red ▲ stressed)",
+                showlegend=False,
+            )
+            show(style(fig, height=380))
+            vt = pd.DataFrame(rval).T.reindex(list(REGIME_STYLE))
+            vt.index = [f"{REGIME_STYLE[r][1]} {REGIME_STYLE[r][2]}" for r in vt.index]
+            vt.columns = ["Share of days", "Next 20d volatility", "Next 20d return", "Chance of 5% drop in next 20d"]
+            st.dataframe(vt.style.format("{:.1%}"), width="stretch")
 
 # --- live track record -------------------------------------------------------------------------
 

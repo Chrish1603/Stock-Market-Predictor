@@ -1,10 +1,20 @@
 # Stock Market Predictor
 
-Predicts stock moves 1, 5 and 20 trading days ahead with machine learning. An automated pipeline downloads, cleans and processes daily
-prices, trains models, and writes predictions. A Streamlit dashboard shows the results.
+An automated machine-learning pipeline for US stocks: it downloads, cleans and processes daily prices, then
+forecasts **risk** (volatility, chance of a 5% drop, market regime) and **direction** (up/down, 1-20 days ahead),
+sizes positions with volatility targeting, and tracks every live prediction. A Streamlit dashboard shows it all.
 
-> Educational project, not financial advice. Daily returns are close to random, so expect models to be only
-> slightly better than a coin flip, if at all.
+**Main findings (all out of sample):**
+- **Direction is close to unpredictable.** Across 12 models and many input and model variations, the best
+  walk-forward ROC-AUC is about 0.52 (0.5 = coin flip). The tests behind that are documented below.
+- **Risk is predictable.** Volatility forecasts beat "same as last month" for every stock and horizon; for the
+  S&P 500 they explain 42% of the variation in 5-day volatility.
+- **Volatility targeting works.** On a 2013-2026 out-of-sample backtest it cut the 4-stock portfolio's worst
+  drawdown from -37.5% to -17.8% and raised its Sharpe ratio from 1.31 to 1.40.
+- **A better forecast didn't mean better sizing.** Sizing with last month's volatility did as well or better
+  than sizing with the model's forecast, so the simpler rule is the default.
+
+> Educational project, not financial advice.
 
 ## What it does
 
@@ -15,6 +25,9 @@ prices, trains models, and writes predictions. A Streamlit dashboard shows the r
 | Features | `smp.features` | 34 features per stock by default: price (returns, moving-average ratios, MACD, RSI, stochastic, volatility, ATR, Bollinger %B, volume), market (S&P 500, VIX), earnings (days to next / since last report, last EPS surprise) and calendar. Optional: Treasury-yield and sector-fund inputs (see below). Plus targets for each horizon (1, 5, 20 days): log return and up/down direction. |
 | Train | `smp.train` | For each ticker, horizon and target: baseline, linear model, LightGBM and XGBoost compared with walk-forward cross-validation. The best non-baseline model is evaluated on the last 12 months (hold-out) and backtested, then refit on all data. Saved to `models/<TICKER>/h<N>/`. |
 | Predict | `smp.predict` | `models/predictions.parquet`: P(up) and predicted return for each horizon. |
+| Risk | `smp.risk` | For 5 and 20 days ahead: realised volatility (vs persistence and HAR baselines) and P(close falls 5%), including a calibrated random-walk ("vol-implied") model. Saved to `models/<TICKER>/risk_h<N>/` with out-of-fold predictions. |
+| Allocation | `smp.allocation` | Volatility-targeted position sizes, backtested 2013-2026 on out-of-sample forecasts, per stock and for an equal-weight portfolio. |
+| Regime | `smp.regime` | Calm / normal / stressed label for the S&P 500 from forecast-vol percentile, breadth across 63 stocks and trend. |
 | Track record | `smp.history` | Every prediction is appended to `data/history/predictions.parquet` and scored once its target day has closed. Only the first prediction per ticker and day is kept, so the record can't be rewritten. |
 
 ### Avoiding misleading results
@@ -56,7 +69,9 @@ Settings (tickers, horizons, sector funds, earnings on/off, dates, hold-out leng
 Logs are written to `logs/pipeline.log`.
 
 ### Dashboard
-- **Overview**: next-day prediction for each ticker.
+- **Overview**: direction prediction for each ticker.
+- **Risk & allocation**: market regime, volatility and drop-risk forecasts, suggested position sizes, forecast vs
+  realised volatility, the allocation backtest and the regime history.
 - **Track record**: live hit rate of past predictions vs always guessing "up", and each prediction's outcome.
 - **Price & indicators**: candlesticks with SMA 20/50 and Bollinger band, volume, RSI and MACD.
 - **Model performance**: CV and hold-out metrics for every model vs baseline, ROC curve and confusion matrix
@@ -82,6 +97,46 @@ launchctl load ~/Library/LaunchAgents/com.smp.pipeline.plist
 **GitHub Actions**: [.github/workflows/pipeline.yml](.github/workflows/pipeline.yml) runs lint and tests on every
 push, and runs the full pipeline on weekdays at 22:30 UTC (or on demand), uploading models and predictions as a
 build artifact.
+
+## Risk forecasting and allocation results
+
+Walk-forward CV, 2010-2025, with the last 12 months held out. Volatility models are scored on log annualised
+realised volatility (R², higher is better):
+
+| Ticker | Horizon | Chosen model | R² | HAR baseline | "Same as last month" |
+|---|---|---|---|---|---|
+| SPY | 5d | ridge | **0.42** | 0.26 | 0.09 |
+| SPY | 20d | ridge | **0.15** | 0.13 | -0.20 |
+| AAPL | 5d | ridge | **0.17** | 0.07 | -0.12 |
+| MSFT | 5d | ridge | **0.16** | 0.09 | -0.14 |
+| NVDA | 5d | lightgbm | **0.09** | 0.02 | -0.16 |
+
+Single stocks are harder than the index (earnings jumps). Drop probabilities are picked by Brier score: the
+calibrated vol-implied model beat the historical drop rate in 6 of 8 cases; for the other two the dashboard shows
+the historical rate.
+
+**Allocation, 2013-2026 out of sample** (target 15% vol, no leverage, 0.1% cost per unit traded):
+
+| 4-stock equal weight | CAGR | Volatility | Sharpe | Max drawdown |
+|---|---|---|---|---|
+| Buy & hold | 33.9% | 24.5% | 1.31 | -37.5% |
+| Vol target, trailing vol (default) | 18.5% | 12.8% | **1.40** | **-17.8%** |
+| Vol target, model forecast | 17.7% | 13.3% | 1.29 | -22.8% |
+| Model forecast + drop filter | 16.4% | 12.6% | 1.27 | -22.6% |
+
+Vol targeting holds about a third in cash on average, so it gives up return in a strong bull market in exchange
+for half the drawdown. The backtest period was unusually good for these four stocks, which flatters buy-and-hold.
+
+**Market regime** (S&P 500, out of sample; next 20 trading days):
+
+| Regime | Share of days | Volatility | Chance of a 5% drop | Average return |
+|---|---|---|---|---|
+| Calm | 26% | 10% | 8% | +0.6% |
+| Normal | 60% | 14% | 13% | +1.0% |
+| Stressed | 14% | 24% | 24% | +3.0% |
+
+The labels separate risk well, but returns were higher after stressed days (rebounds), so it is a risk signal,
+not a sell signal. Known limitation: it switches in and out of "stressed" often (73 spells in 13 years).
 
 ## Example results: 1-day horizon (hold-out 29 Oct 2025 to 29 Oct 2026)
 
