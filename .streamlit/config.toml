@@ -1,0 +1,7 @@
+[theme]
+# Blue accent, so red stays reserved for "down" and "stressed".
+primaryColor = "#2a78d6"
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"   # hide the Deploy button

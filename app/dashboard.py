@@ -7,6 +7,7 @@ Reads pipeline outputs only; training happens in the pipeline (`smp run-all`).
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -64,6 +65,87 @@ REGIME_STYLE = {
     "normal": (C["muted"], "◐", "Normal"),
     "stressed": ("#d03b3b", "▲", "Stressed"),
 }
+
+
+FEATURE_NAMES = {
+    "macd": "MACD",
+    "macd_hist": "MACD histogram",
+    "rsi_14": "RSI (14)",
+    "stoch_k": "Stochastic %K",
+    "atr_14": "Average daily range (ATR)",
+    "bb_pctb": "Position in Bollinger band",
+    "hl_range": "Today's high-low range",
+    "volume_z": "Volume vs normal",
+    "obv_change_10": "On-balance volume, 10d",
+    "day_of_week": "Day of week",
+    "month": "Month",
+    "ewm_vol_20": "Volatility (EWMA)",
+    "downside_vol_20": "Downside volatility",
+    "parkinson_vol_20": "Range-based volatility",
+    "vol_ratio_5_60": "Volatility, 5d vs 60d",
+    "drawdown_60": "Drop from 60-day high",
+    "days_to_earnings": "Days to earnings",
+    "days_since_earnings": "Days since earnings",
+    "last_eps_surprise": "Last earnings surprise",
+    "has_earnings": "Has earnings",
+    "vix_level": "VIX level",
+    "vix_change_5": "VIX change, 5d",
+    "yield_curve_change_20": "Yield curve change, 20d",
+    "yield_curve_inverted": "Yield curve inverted",
+    "sector_sma_ratio_50": "Sector vs its 50-day average",
+}
+METRIC_NAMES = {
+    "roc_auc": "ROC-AUC",
+    "accuracy": "Accuracy",
+    "precision": "Precision",
+    "recall": "Recall",
+    "f1": "F1",
+    "log_loss": "Log loss",
+    "up_rate": "Share of up days",
+    "mae": "MAE",
+    "rmse": "RMSE",
+    "r2": "R²",
+    "directional_accuracy": "Direction right",
+}
+
+
+def feature_label(name: str) -> str:
+    """Readable name for a model input, e.g. 'sma_ratio_50' -> 'Price vs 50-day average'."""
+    if name in FEATURE_NAMES:
+        return FEATURE_NAMES[name]
+    if name.startswith("xs_rank_"):
+        return f"Rank among stocks: {feature_label(name[8:]).lower()}"
+    patterns = [
+        (r"ret_lag_1", "Return yesterday"),
+        (r"ret_lag_(\d+)", "Return {} days ago"),
+        (r"ret_(\d+)", "Return, past {}d"),
+        (r"sma_ratio_(\d+)", "Price vs {}-day average"),
+        (r"ema_ratio_(\d+)", "Price vs {}-day EMA"),
+        (r"vol_(\d+)", "Volatility, {}d"),
+        (r"spy_ret_(\d+)", "S&P 500 return, {}d"),
+        (r"(tnx|irx)_change_(\d+)", "{} yield change, {}d"),
+        (r"sector_ret_(\d+)", "Sector return, {}d"),
+        (r"rel_strength_(\d+)", "Strength vs sector, {}d"),
+    ]
+    for pattern, text in patterns:
+        if m := re.fullmatch(pattern, name):
+            parts = [{"tnx": "10-year", "irx": "3-month"}.get(g, g) for g in m.groups()]
+            return text.format(*parts)
+    return name
+
+
+def as_text(df: pd.DataFrame, formats: dict[str, str]) -> pd.DataFrame:
+    """Format columns as strings with '–' for missing values (st.dataframe ignores Styler na_rep)."""
+    out = df.copy().astype(object)
+    for col in out.columns:
+        fmt = formats.get(col)
+        out[col] = [
+            "–"
+            if v is None or v is pd.NaT or (isinstance(v, float) and np.isnan(v))
+            else (fmt.format(v) if fmt else str(v))
+            for v in df[col]
+        ]
+    return out
 
 
 def style(fig: go.Figure, height: int = 420) -> go.Figure:
@@ -136,32 +218,29 @@ def load_quality() -> dict:
 # --- sidebar -----------------------------------------------------------------------------------
 
 st.sidebar.title("Stock Market Predictor")
-ticker = st.sidebar.selectbox("Ticker", CFG.data.tickers, help="Used by the detail tabs")
-st.sidebar.markdown("**Direction model**")
-st.sidebar.caption("Only affects the Direction models and Track record tabs.")
-horizon = st.sidebar.radio(
-    "Horizon",
-    CFG.train.horizons,
-    format_func=lambda h: f"{h} trading day{'s' if h > 1 else ''} ahead",
-    horizontal=True,
-)
-H_LABEL = "next-day" if horizon == 1 else f"{horizon}-day"
-task = st.sidebar.radio(
-    "Model",
-    ["classifier", "regressor"],
-    format_func=lambda t: "Direction (up/down)" if t == "classifier" else "Return (regression)",
-)
-if st.sidebar.button("Refresh data & predictions", help="Downloads new prices and re-predicts. Does not retrain."):
-    with st.spinner("Updating data..."):
+st.sidebar.caption("Risk forecasts and position sizing for US stocks, with direction models for comparison.")
+ticker = st.sidebar.selectbox("Stock", CFG.data.tickers, help="Used by the Price, Direction and Track record tabs")
+_latest = load_prices(CFG.data.tickers[0])
+if _latest is not None:
+    st.sidebar.markdown(f"**Data as of** {_latest.index[-1]:%a %d %b %Y}")
+if st.sidebar.button(
+    "Refresh data", help="Downloads new prices and updates forecasts. Does not retrain.", width="stretch"
+):
+    with st.spinner("Downloading prices and updating forecasts..."):
         pipeline.setup_logging(CFG.paths.logs)
         pipeline.refresh(CFG)
     st.cache_data.clear()
     st.sidebar.success("Updated")
-st.sidebar.caption("Retrain with `smp run-all` (or `smp train`).")
+st.sidebar.caption("Models retrain in the daily scheduled run (`smp run-all`).")
+st.sidebar.divider()
 st.sidebar.caption("Educational project, not financial advice.")
 
+
+def horizon_label(h: int) -> str:
+    return f"{h} day" if h == 1 else f"{h} days"
+
+
 prices = load_prices(ticker)
-metrics = load_metrics(ticker, horizon)
 if prices is None:
     st.warning("No data yet. Run `smp run-all` first.")
     st.stop()
@@ -370,12 +449,11 @@ with tab_risk:
                 "were on average higher (rebounds), but swings were much larger."
             )
         st.subheader("Risk forecasts")
-        rh = st.radio(
-            "Risk horizon",
-            rc.horizons,
-            index=len(rc.horizons) - 1,
-            horizontal=True,
-            format_func=lambda h: f"{h} trading days",
+        rh = (
+            st.segmented_control(
+                "Risk horizon", rc.horizons, default=rc.horizons[-1], format_func=horizon_label, key="risk_h"
+            )
+            or rc.horizons[-1]
         )
         rp = rpreds[rpreds["horizon"] == rh].set_index("ticker")
         cols = st.columns(len(rp))
@@ -429,9 +507,8 @@ with tab_risk:
         # Allocation backtest
         st.subheader("Volatility-targeted allocation, 2013 to today (out of sample)")
         port_ok = (CFG.paths.models / "_portfolio" / "allocation" / "stats.json").exists()
-        choice = st.radio(
-            "Show", ([f"All {len(CFG.data.tickers)} (equal weight)"] if port_ok else []) + [ticker], horizontal=True
-        )
+        show_opts = ([f"All {len(CFG.data.tickers)} (equal weight)"] if port_ok else []) + [ticker]
+        choice = st.segmented_control("Show", show_opts, default=show_opts[0], key="alloc_show") or show_opts[0]
         base = CFG.paths.models / "_portfolio" / "allocation" if choice != ticker else allocation_path(CFG, ticker)
         curves, stats = load_parquet(str(base / "curves.parquet")), load_json(str(base / "stats.json"))
         if curves is None or stats is None:
@@ -526,29 +603,38 @@ with tab_track:
         "Every prediction is saved when it's made and scored after the next close. Unlike the hold-out test, "
         "these were made before the outcome existed. Compare the hit rate with always guessing 'up'."
     )
+    track_h = (
+        st.segmented_control(
+            "Horizon", CFG.train.horizons, default=CFG.train.horizons[0], format_func=horizon_label, key="track_h"
+        )
+        or CFG.train.horizons[0]
+    )
     if hist.empty:
         st.info("No predictions recorded yet. Run `smp predict` (or `smp run-all`).")
     else:
         summary = summarize(hist)
-        summary = summary[summary["horizon"] == horizon].set_index("ticker")
+        summary = summary[summary["horizon"] == track_h].set_index("ticker")
+        summary = summary.assign(first=summary["first"].dt.date, last=summary["last"].dt.date)
+        summary = summary[["predictions", "scored", "hit_rate", "always_up_hit_rate", "brier", "first", "last"]]
+        summary.columns = [
+            "Predictions",
+            "Scored",
+            "Hit rate",
+            "Always 'up' hit rate",
+            "Brier score",
+            "First",
+            "Latest",
+        ]
+        summary.index.name = "Stock"
         st.dataframe(
-            summary.style.format(
-                {
-                    "hit_rate": "{:.1%}",
-                    "always_up_hit_rate": "{:.1%}",
-                    "brier": "{:.4f}",
-                    "avg_return_when_up_call": "{:+.3%}",
-                    "avg_return_when_down_call": "{:+.3%}",
-                },
-                na_rep="–",
-            ),
+            as_text(summary, {"Hit rate": "{:.0%}", "Always 'up' hit rate": "{:.0%}", "Brier score": "{:.3f}"}),
             width="stretch",
         )
-        th = hist[(hist["ticker"] == ticker) & (hist["horizon"] == horizon)].sort_values("as_of")
+        th = hist[(hist["ticker"] == ticker) & (hist["horizon"] == track_h)].sort_values("as_of")
         scored = th.dropna(subset=["actual_return"])
         if len(scored) < 2:
             st.info(
-                f"{ticker}: {len(th)} prediction(s) recorded, {len(scored)} scored so far. "
+                f"{ticker}: {len(th)} prediction{'s' if len(th) != 1 else ''} recorded, {len(scored)} scored so far. "
                 "The chart appears once a few days have been scored. Run the pipeline each trading day."
             )
         else:
@@ -577,10 +663,11 @@ with tab_track:
                 target_date=lambda d: pd.to_datetime(d["target_date"]).dt.date,
                 result=lambda d: d["correct"].map({1.0: "✓ right", 0.0: "✗ wrong"}).fillna("pending"),
             )
+            recent = recent[["as_of", "direction", "p_up", "target_date", "actual_return", "result"]]
+            recent.columns = ["Made on", "Call", "Chance of up", "Scored on", "What happened", "Result"]
+            st.markdown(f"**{ticker}: every {horizon_label(track_h).replace(' ', '-')} prediction**")
             st.dataframe(
-                recent[
-                    ["as_of", "direction", "p_up", "pred_return", "target_date", "actual_return", "result"]
-                ].style.format({"p_up": "{:.1%}", "pred_return": "{:+.3%}", "actual_return": "{:+.3%}"}, na_rep="–"),
+                as_text(recent, {"Chance of up": "{:.0%}", "What happened": "{:+.2%}"}),
                 hide_index=True,
                 width="stretch",
             )
@@ -589,7 +676,7 @@ with tab_track:
 
 with tab_price:
     ranges = {"3M": 63, "6M": 126, "1Y": 252, "3Y": 756, "All": None}
-    choice = st.radio("Range", list(ranges), index=2, horizontal=True)
+    choice = st.segmented_control("Range", list(ranges), default="1Y", key="price_range") or "1Y"
 
     c = prices["Close"]
     ind = pd.DataFrame(index=prices.index)
@@ -603,9 +690,9 @@ with tab_price:
         rows=4,
         cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.03,
-        row_heights=[0.5, 0.15, 0.17, 0.18],
-        subplot_titles=("Price", "Volume", "RSI (14)", "MACD"),
+        vertical_spacing=0.07,
+        row_heights=[0.5, 0.14, 0.17, 0.19],
+        subplot_titles=(f"{ticker} price", "Volume", "RSI (14): above 70 stretched, below 30 washed out", "MACD"),
     )
     fig.add_trace(go.Scatter(x=ix.index, y=ix["upper"], line=dict(width=0), showlegend=False, hoverinfo="skip"), 1, 1)
     fig.add_trace(
@@ -667,9 +754,28 @@ with tab_price:
 
 with tab_model:
     st.caption(
-        "Up/down and return models for the horizon and model type picked in the sidebar. In testing these are "
-        "close to a coin flip, so treat them as an experiment, not a signal."
+        "Up/down and return models. In testing these are close to a coin flip, so treat them as an experiment, "
+        "not a signal."
     )
+    cc = st.columns([1, 1, 2])
+    horizon = (
+        cc[0].segmented_control(
+            "Horizon", CFG.train.horizons, default=CFG.train.horizons[0], format_func=horizon_label, key="dir_h"
+        )
+        or CFG.train.horizons[0]
+    )
+    task = (
+        cc[1].segmented_control(
+            "Model",
+            ["classifier", "regressor"],
+            default="classifier",
+            key="dir_task",
+            format_func=lambda t: "Up / down" if t == "classifier" else "Return size",
+        )
+        or "classifier"
+    )
+    H_LABEL = "next-day" if horizon == 1 else f"{horizon}-day"
+    metrics = load_metrics(ticker, horizon)
     if metrics is None:
         st.info("No trained model for this ticker. Run `smp train`.")
     else:
@@ -693,12 +799,28 @@ with tab_model:
         else:
             st.warning("⚠ Does not beat the naive baseline in cross-validation")
 
+        key_metrics = (
+            ["roc_auc", "accuracy", "log_loss"] if task == "classifier" else ["rmse", "r2", "directional_accuracy"]
+        )
+        order = [m["selected"]] + [n for n in m["cv"] if n != m["selected"]]
         rows = []
-        for name in m["cv"]:
-            rows.append({"model": name, "split": "CV (mean)", **m["cv"][name]})
-            rows.append({"model": name, "split": "Hold-out", **m["holdout"][name]})
-        table = pd.DataFrame(rows).set_index(["model", "split"])
-        st.dataframe(table.style.format("{:.4f}"), width="stretch")
+        for name in order:
+            label = f"{name} (chosen)" if name == m["selected"] else name
+            row = {"Model": label}
+            for k in key_metrics:
+                row[f"{METRIC_NAMES[k]} · CV"] = m["cv"][name][k]
+                row[f"{METRIC_NAMES[k]} · hold-out"] = m["holdout"][name][k]
+            rows.append(row)
+        st.dataframe(pd.DataFrame(rows).set_index("Model").style.format("{:.3f}"), width="stretch")
+        st.caption(
+            "CV = average over walk-forward folds (2010 to last year); hold-out = the final 12 months, never used "
+            "for training or model choice. "
+            + (
+                "ROC-AUC 0.50 means no better than chance."
+                if task == "classifier"
+                else "R² below 0 means worse than always predicting zero."
+            )
+        )
 
         left, right = st.columns(2)
         if task == "classifier":
@@ -709,8 +831,10 @@ with tab_model:
                 go.Scatter(x=[0, 1], y=[0, 1], name="Chance", line=dict(color=C["muted"], width=1, dash="dot"))
             )
             roc.add_trace(go.Scatter(x=fpr, y=tpr, name=m["selected"], line=dict(color=C["s1"], width=2)))
+            roc.add_annotation(x=0.62, y=0.45, text="chance", showarrow=False, font=dict(color=C["muted"]))
             roc.update_layout(
-                title="ROC curve (hold-out)",
+                showlegend=False,
+                title=f"ROC curve, hold-out (area {m['holdout'][m['selected']]['roc_auc']:.2f})",
                 xaxis_title="False positive rate",
                 yaxis_title="True positive rate",
                 hovermode="closest",
@@ -766,6 +890,7 @@ with tab_model:
             )
 
         imp = pd.Series(m["feature_importance"]).head(15).sort_values()
+        imp.index = [feature_label(i) for i in imp.index]
         if not imp.empty:
             bar = go.Figure(
                 go.Bar(
@@ -776,8 +901,10 @@ with tab_model:
                     hovertemplate="%{y}: %{x:.1%}<extra></extra>",
                 )
             )
-            bar.update_layout(title=f"Top features ({m['selected']})", hovermode="closest")
-            bar.update_xaxes(tickformat=".0%")
+            bar.update_layout(
+                title=f"What the {m['selected']} model relies on most (share of importance)", hovermode="closest"
+            )
+            bar.update_xaxes(tickformat=".1%")
             show(style(bar, height=480))
 
 # --- backtest ----------------------------------------------------------------------------------
@@ -797,18 +924,28 @@ with tab_bt:
         st.subheader(f"Hold-out backtest: {rule}, else cash")
         held = "Position reviewed every day" if horizon == 1 else f"Position held {horizon} days, then reviewed"
         st.caption(f"{held}. Costs: {CFG.backtest.cost:.2%} per position change. Trades at the close.")
-        k = st.columns(5)
-        k[0].metric(
-            "Strategy return",
-            f"{s['strategy_total_return']:+.1%}",
-            f"{s['strategy_total_return'] - s['buy_hold_total_return']:+.1%} vs buy & hold",
+        comp = pd.DataFrame(
+            {
+                "Total return": [s["strategy_total_return"], s["buy_hold_total_return"]],
+                "Sharpe": [s["strategy_sharpe"], s["buy_hold_sharpe"]],
+                "Max drawdown": [s["strategy_max_drawdown"], s["buy_hold_max_drawdown"]],
+                "Time invested": [s["exposure"], 1.0],
+                "Trades": [s["n_trades"], 1],
+            },
+            index=["Model strategy", "Buy & hold"],
         )
-        k[1].metric("Buy & hold return", f"{s['buy_hold_total_return']:+.1%}")
-        k[2].metric("Sharpe (strategy / B&H)", f"{s['strategy_sharpe']:.2f} / {s['buy_hold_sharpe']:.2f}")
-        k[3].metric(
-            "Max drawdown (strategy / B&H)", f"{s['strategy_max_drawdown']:.1%} / {s['buy_hold_max_drawdown']:.1%}"
+        st.dataframe(
+            comp.style.format(
+                {
+                    "Total return": "{:+.1%}",
+                    "Sharpe": "{:.2f}",
+                    "Max drawdown": "{:.1%}",
+                    "Time invested": "{:.0%}",
+                    "Trades": "{:.0f}",
+                }
+            ),
+            width="stretch",
         )
-        k[4].metric("Time in market · trades", f"{s['exposure']:.0%} · {s['n_trades']}")
 
         eq = go.Figure()
         eq.add_trace(
@@ -857,6 +994,15 @@ with tab_quality:
             }
         ).T
         st.subheader("Cleaning report")
+        k = st.columns(4)
+        k[0].metric("Stocks and indices", len(q))
+        k[1].metric("Daily rows checked", f"{int(summary['rows in'].sum()):,}")
+        k[2].metric("Rows dropped", int(summary["rows dropped"].sum()))
+        k[3].metric("Extreme days flagged", int(summary["outlier days"].sum()), help="Kept in the data, not removed")
+        st.caption(
+            "Every run validates prices: duplicates removed, short gaps filled, impossible bars (high below low) "
+            "fixed, and extreme one-day moves flagged but kept, since they are usually real events."
+        )
         st.dataframe(summary, width="stretch")
         if ticker in q:
             r = q[ticker]
