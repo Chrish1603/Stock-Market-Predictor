@@ -17,7 +17,7 @@ from smp.config import Config
 
 log = logging.getLogger(__name__)
 
-KEY = ["ticker", "as_of"]
+KEY = ["ticker", "horizon", "as_of"]
 OUTCOME_COLS = ["target_date", "actual_return", "actual_direction", "correct"]
 
 
@@ -27,7 +27,12 @@ def history_path(cfg: Config):
 
 def load_history(cfg: Config) -> pd.DataFrame:
     p = history_path(cfg)
-    return pd.read_parquet(p) if p.exists() else pd.DataFrame()
+    if not p.exists():
+        return pd.DataFrame()
+    hist = pd.read_parquet(p)
+    if "horizon" not in hist:  # records from before multi-horizon support were 1-day predictions
+        hist["horizon"] = 1
+    return hist
 
 
 def save_history(cfg: Config, hist: pd.DataFrame) -> None:
@@ -36,11 +41,13 @@ def save_history(cfg: Config, hist: pd.DataFrame) -> None:
 
 
 def append_predictions(hist: pd.DataFrame, preds: pd.DataFrame, made_at: datetime | None = None) -> pd.DataFrame:
-    """Add new predictions. The first prediction for a (ticker, day) is kept, so history is never rewritten."""
+    """Add new predictions. The first per (ticker, horizon, day) is kept, so history is never rewritten."""
     if preds.empty:
         return hist
     new = preds.copy()
     new["as_of"] = pd.to_datetime(new["as_of"])
+    if "horizon" not in new:
+        new["horizon"] = 1
     new["made_at"] = pd.Timestamp(made_at or datetime.now(timezone.utc)).tz_localize(None)
     for col in OUTCOME_COLS:
         new[col] = np.nan
@@ -50,7 +57,7 @@ def append_predictions(hist: pd.DataFrame, preds: pd.DataFrame, made_at: datetim
 
 
 def score(hist: pd.DataFrame, prices: dict[str, pd.DataFrame]) -> pd.DataFrame:
-    """Fill in outcomes for predictions whose next trading day has closed."""
+    """Fill in outcomes for predictions whose target day (`horizon` trading days later) has closed."""
     if hist.empty:
         return hist
     hist = hist.copy()
@@ -60,10 +67,11 @@ def score(hist: pd.DataFrame, prices: dict[str, pd.DataFrame]) -> pd.DataFrame:
         if px is None:
             continue
         as_of = hist.at[i, "as_of"]
+        h = int(hist.at[i, "horizon"])
         later = px.index[px.index > as_of]
-        if as_of not in px.index or later.empty:
+        if as_of not in px.index or len(later) < h:
             continue
-        nxt = later[0]
+        nxt = later[h - 1]
         ret = float(np.log(px.at[nxt, "Close"] / px.at[as_of, "Close"]))
         up = float(ret > 0)
         hist.at[i, "target_date"] = nxt
@@ -74,9 +82,10 @@ def score(hist: pd.DataFrame, prices: dict[str, pd.DataFrame]) -> pd.DataFrame:
 
 
 def summarize(hist: pd.DataFrame) -> pd.DataFrame:
-    """Per-ticker live results, compared with always guessing 'up' over the same days."""
+    """Per-ticker, per-horizon live results, compared with always guessing 'up' over the same days."""
     cols = [
         "ticker",
+        "horizon",
         "predictions",
         "scored",
         "hit_rate",
@@ -90,12 +99,13 @@ def summarize(hist: pd.DataFrame) -> pd.DataFrame:
     if hist.empty:
         return pd.DataFrame(columns=cols)
     rows = []
-    for ticker, g in hist.groupby("ticker"):
+    for (ticker, horizon), g in hist.groupby(["ticker", "horizon"]):
         s = g.dropna(subset=["actual_return"])
         up_calls, down_calls = s[s["direction"] == "up"], s[s["direction"] == "down"]
         rows.append(
             {
                 "ticker": ticker,
+                "horizon": int(horizon),
                 "predictions": len(g),
                 "scored": len(s),
                 "hit_rate": s["correct"].mean() if len(s) else np.nan,
@@ -119,12 +129,13 @@ def update_history(cfg: Config, preds: pd.DataFrame) -> pd.DataFrame:
     for r in summarize(hist).itertuples():
         if r.scored:
             log.info(
-                "%s live record: %d scored, hit rate %.1f%% (always-up %.1f%%)",
+                "%s %dd live record: %d scored, hit rate %.1f%% (always-up %.1f%%)",
                 r.ticker,
+                r.horizon,
                 r.scored,
                 r.hit_rate * 100,
                 r.always_up_hit_rate * 100,
             )
         else:
-            log.info("%s live record: %d prediction(s) waiting for outcomes", r.ticker, r.predictions)
+            log.info("%s %dd live record: %d prediction(s) waiting", r.ticker, r.horizon, r.predictions)
     return hist

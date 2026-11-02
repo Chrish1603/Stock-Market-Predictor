@@ -6,7 +6,7 @@ from conftest import make_ohlcv
 from smp.config import Config, PathsConfig, TrainConfig
 from smp.evaluate import backtest, backtest_stats, classification_metrics, regression_metrics
 from smp.features import build_features
-from smp.train import train_ticker, walk_forward_splits
+from smp.train import split_dev_holdout, train_ticker, walk_forward_splits
 
 
 def test_walk_forward_splits_are_time_ordered():
@@ -52,7 +52,7 @@ def test_train_ticker_end_to_end(tmp_path):
             "lightgbm",
             "xgboost",
         }
-    out = tmp_path / "models" / "TEST"
+    out = tmp_path / "models" / "TEST" / "h1"
     for f in (
         "classifier.joblib",
         "regressor.joblib",
@@ -64,3 +64,28 @@ def test_train_ticker_end_to_end(tmp_path):
         assert (out / f).exists()
     # Random-walk data is unpredictable: a much-better-than-chance AUC would mean leakage.
     assert m["classifier"]["holdout"][m["classifier"]["selected"]]["roc_auc"] < 0.65
+
+
+def test_backtest_holds_position_for_horizon():
+    idx = pd.bdate_range("2020-01-01", periods=6)
+    r = pd.Series(0.01, index=idx)
+    sig = pd.Series([1, 0, 0, 0, 1, 1], index=idx, dtype=float)
+    bt = backtest(r, sig, cost=0.0, hold_days=3)
+    # decisions only on days 0 and 3: day 0 says long (held 3 days), day 3 says cash (held 3 days)
+    assert bt["position"].tolist() == [1, 1, 1, 0, 0, 0]
+
+
+def test_dev_holdout_gap_matches_horizon():
+    data = pd.DataFrame({"x": range(100)}, index=pd.bdate_range("2020-01-01", periods=100))
+    dev, hold = split_dev_holdout(data, holdout_days=20, horizon=5)
+    assert len(hold) == 20
+    # last dev label (5 days ahead) must end before the hold-out starts
+    assert data.index.get_loc(dev.index[-1]) + 5 < data.index.get_loc(hold.index[0])
+
+
+def test_train_longer_horizon(tmp_path):
+    feats = build_features(make_ohlcv(n=900), {"SPY": make_ohlcv(n=900, seed=1)}, horizons=[5])
+    cfg = Config(train=TrainConfig(n_splits=3, holdout_days=150), paths=PathsConfig().resolve(tmp_path))
+    m = train_ticker(cfg, "TEST", feats, horizon=5)
+    assert m["horizon"] == 5
+    assert (tmp_path / "models" / "TEST" / "h5" / "classifier.joblib").exists()

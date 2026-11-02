@@ -1,6 +1,6 @@
 # Stock Market Predictor
 
-Predicts next-day stock moves with machine learning. An automated pipeline downloads, cleans and processes daily
+Predicts stock moves 1, 5 and 20 trading days ahead with machine learning. An automated pipeline downloads, cleans and processes daily
 prices, trains models, and writes predictions. A Streamlit dashboard shows the results.
 
 > Educational project, not financial advice. Daily returns are close to random, so expect models to be only
@@ -12,14 +12,16 @@ prices, trains models, and writes predictions. A Streamlit dashboard shows the r
 |---|---|---|
 | Ingest | `smp.ingest` | Daily adjusted OHLCV from Yahoo Finance in `data/raw/`. Re-runs only fetch new days, and refetch full history if past prices were re-adjusted (splits/dividends). |
 | Clean | `smp.clean` | Sorted, de-duplicated, validated prices in `data/processed/clean/`, plus `quality_report.json` (filled values, dropped rows, fixed OHLC bars, flagged extreme moves, gaps). |
-| Features | `smp.features` | 31 features per day (returns, moving-average ratios, MACD, RSI, stochastic, volatility, ATR, Bollinger %B, volume, SPY and VIX context, calendar) and two targets: next-day log return and up/down direction. |
-| Train | `smp.train` | For each ticker and target: baseline, linear model, LightGBM and XGBoost compared with walk-forward cross-validation. The best non-baseline model is evaluated on the last 12 months (hold-out) and backtested, then refit on all data. Saved to `models/<TICKER>/`. |
-| Predict | `smp.predict` | `models/predictions.parquet`: P(up) and predicted return for the next trading day. |
-| Track record | `smp.history` | Every prediction is appended to `data/history/predictions.parquet` and scored once the next close is known. Only the first prediction per ticker and day is kept, so the record can't be rewritten. |
+| Features | `smp.features` | 31 features per day (returns, moving-average ratios, MACD, RSI, stochastic, volatility, ATR, Bollinger %B, volume, SPY and VIX context, calendar) and targets for each horizon (1, 5, 20 days): log return and up/down direction. |
+| Train | `smp.train` | For each ticker, horizon and target: baseline, linear model, LightGBM and XGBoost compared with walk-forward cross-validation. The best non-baseline model is evaluated on the last 12 months (hold-out) and backtested, then refit on all data. Saved to `models/<TICKER>/h<N>/`. |
+| Predict | `smp.predict` | `models/predictions.parquet`: P(up) and predicted return for each horizon. |
+| Track record | `smp.history` | Every prediction is appended to `data/history/predictions.parquet` and scored once its target day has closed. Only the first prediction per ticker and day is kept, so the record can't be rewritten. |
 
 ### Avoiding misleading results
 - Features at day *t* only use data up to *t*'s close (`tests/test_features.py::test_no_lookahead`).
-- Time-ordered splits only, with a gap between train and test; scaling is fit inside each fold.
+- Time-ordered splits only, with a gap between train and test at least as long as the horizon (so overlapping
+  multi-day labels can't leak); scaling is fit inside each fold.
+- Longer-horizon backtests hold each position for the full horizon instead of trading daily.
 - Every model is compared with a naive baseline (most-common class / zero return).
 - The backtest charges 0.1% per position change and is compared with buy-and-hold.
 - Today's price bar is ignored until 16:30 New York time, so features and scoring only use final closing prices.
@@ -47,7 +49,7 @@ smp track-record               # how past live predictions turned out
 streamlit run app/dashboard.py # open the dashboard
 ```
 
-Settings (tickers, dates, hold-out length, costs, paths) live in [config/config.yaml](config/config.yaml).
+Settings (tickers, horizons, dates, hold-out length, costs, paths) live in [config/config.yaml](config/config.yaml).
 Logs are written to `logs/pipeline.log`.
 
 ### Dashboard
@@ -59,11 +61,13 @@ Logs are written to `logs/pipeline.log`.
 - **Backtest**: growth of $1 and drawdown, strategy vs buy-and-hold.
 - **Data quality**: the cleaning report.
 
-The sidebar button fetches new data and re-predicts without retraining.
+Pick the horizon in the sidebar; every tab follows it. The sidebar button fetches new data and re-predicts
+without retraining.
 
 ## Automation
 
-**Local (macOS launchd)**: runs weekdays at 22:30 local time.
+**Local (macOS launchd)**: the included plist runs at 11:00 Tue-Sat New Zealand time, just after the Mon-Fri US
+close. Adjust the times for your time zone so it runs after 16:30 New York time.
 ```bash
 # edit the path inside the plist first
 cp scripts/com.smp.pipeline.plist ~/Library/LaunchAgents/
@@ -76,7 +80,7 @@ launchctl load ~/Library/LaunchAgents/com.smp.pipeline.plist
 push, and runs the full pipeline on weekdays at 22:30 UTC (or on demand), uploading models and predictions as a
 build artifact.
 
-## Example results (hold-out 29 Oct 2025 to 29 Oct 2026)
+## Example results: 1-day horizon (hold-out 29 Oct 2025 to 29 Oct 2026)
 
 | Ticker | Direction model | ROC-AUC | Accuracy | Backtest return | Buy & hold |
 |---|---|---|---|---|---|

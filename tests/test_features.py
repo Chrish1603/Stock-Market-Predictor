@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from conftest import make_ohlcv
-from smp.features import TARGET_DIRECTION, TARGET_RETURN, build_features, feature_columns, rsi
+from smp.features import build_features, feature_columns, rsi, target_direction, target_return
 
 
 def test_rsi_extremes():
@@ -21,10 +21,20 @@ def test_rsi_in_range(ohlcv):
 def test_targets_are_next_day(ohlcv):
     f = build_features(ohlcv)
     c = ohlcv["Close"]
-    assert np.isclose(f[TARGET_RETURN].iloc[10], np.log(c.iloc[11] / c.iloc[10]))
-    assert np.isnan(f[TARGET_RETURN].iloc[-1])
-    assert np.isnan(f[TARGET_DIRECTION].iloc[-1])
-    assert set(f[TARGET_DIRECTION].dropna().unique()) <= {0.0, 1.0}
+    assert np.isclose(f[target_return(1)].iloc[10], np.log(c.iloc[11] / c.iloc[10]))
+    assert np.isnan(f[target_return(1)].iloc[-1])
+    assert np.isnan(f[target_direction(1)].iloc[-1])
+    assert set(f[target_direction(1)].dropna().unique()) <= {0.0, 1.0}
+
+
+def test_multi_horizon_targets(ohlcv):
+    f = build_features(ohlcv, horizons=[5, 20])
+    c = ohlcv["Close"]
+    assert target_return(1) in f  # always present for backtests
+    assert np.isclose(f[target_return(5)].iloc[10], np.log(c.iloc[15] / c.iloc[10]))
+    assert f[target_return(20)].iloc[-20:].isna().all()
+    assert f[target_return(20)].iloc[:-20].notna().all()
+    assert not any(col.startswith("target_") for col in feature_columns(f))
 
 
 def test_no_lookahead(ohlcv):

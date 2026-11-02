@@ -1,7 +1,7 @@
 """Technical-indicator features and next-day targets.
 
 Every feature at row t uses only data up to and including day t's close.
-Targets describe day t -> t+1 and are the only columns that look forward.
+Targets describe day t -> t+h (h trading days ahead) and are the only columns that look forward.
 """
 
 from __future__ import annotations
@@ -16,9 +16,17 @@ from smp.config import Config, ticker_to_filename
 
 log = logging.getLogger(__name__)
 
-TARGET_RETURN = "target_return"
-TARGET_DIRECTION = "target_direction"
-TARGETS = [TARGET_RETURN, TARGET_DIRECTION]
+TARGET_PREFIX = "target_"
+
+
+def target_return(h: int = 1) -> str:
+    """Column name of the h-day-ahead log return."""
+    return f"target_return_{h}"
+
+
+def target_direction(h: int = 1) -> str:
+    """Column name of the h-day-ahead up (1) / down (0) label."""
+    return f"target_direction_{h}"
 
 
 # --- indicator helpers (also used by the dashboard) -------------------------------------------
@@ -58,8 +66,13 @@ def atr(df: pd.DataFrame, n: int = 14) -> pd.Series:
 # --- feature construction ---------------------------------------------------------------------
 
 
-def build_features(df: pd.DataFrame, market: dict[str, pd.DataFrame] | None = None) -> pd.DataFrame:
-    """Return a frame of features plus the two targets, indexed like `df`."""
+def build_features(
+    df: pd.DataFrame, market: dict[str, pd.DataFrame] | None = None, horizons: list[int] | tuple[int, ...] = (1,)
+) -> pd.DataFrame:
+    """Return a frame of features plus targets for each horizon, indexed like `df`.
+
+    The 1-day target is always included; backtests use it as the daily return.
+    """
     c, v = df["Close"], df["Volume"]
     log_ret = np.log(c).diff()
     out = pd.DataFrame(index=df.index)
@@ -116,13 +129,15 @@ def build_features(df: pd.DataFrame, market: dict[str, pd.DataFrame] | None = No
     out = out.replace([np.inf, -np.inf], np.nan)
 
     # Targets: next-day log return and its direction
-    out[TARGET_RETURN] = np.log(c.shift(-1) / c)
-    out[TARGET_DIRECTION] = (out[TARGET_RETURN] > 0).astype(float).where(out[TARGET_RETURN].notna())
+    for h in sorted({1, *horizons}):
+        ret = np.log(c.shift(-h) / c)
+        out[target_return(h)] = ret
+        out[target_direction(h)] = (ret > 0).astype(float).where(ret.notna())
     return out
 
 
 def feature_columns(df: pd.DataFrame) -> list[str]:
-    return [col for col in df.columns if col not in TARGETS]
+    return [col for col in df.columns if not col.startswith(TARGET_PREFIX)]
 
 
 def features_path(cfg: Config, ticker: str):
@@ -146,7 +161,7 @@ def build_all(cfg: Config) -> dict[str, int]:
         if not p.exists():
             log.warning("%s: no clean data, skipping features", ticker)
             continue
-        feats = build_features(pd.read_parquet(p), market)
+        feats = build_features(pd.read_parquet(p), market, cfg.train.horizons)
         feats.to_parquet(features_path(cfg, ticker))
         counts[ticker] = len(feats)
         log.info("%s: %d feature rows, %d features", ticker, len(feats), len(feature_columns(feats)))

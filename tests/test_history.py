@@ -65,3 +65,21 @@ def test_drop_incomplete_bar():
     after = datetime(friday.year, friday.month, friday.day, 17, 0, tzinfo=MARKET_TZ)
     assert len(drop_incomplete_bar(df, during)) == 4
     assert len(drop_incomplete_bar(df, after)) == 5
+
+
+def test_score_multi_day_horizon():
+    px = make_ohlcv(n=10, start="2020-01-02")
+    preds = _preds(px.index[0], 0.7).assign(horizon=5)
+    late = _preds(px.index[6], 0.7).assign(horizon=5)  # only 3 days left: still pending
+    hist = append_predictions(append_predictions(pd.DataFrame(), preds), late)
+    scored = score(hist, {"AAA": px})
+    first = scored[scored["as_of"] == px.index[0]].iloc[0]
+    assert first["target_date"] == px.index[5]
+    assert first["actual_return"] == pytest.approx(np.log(px["Close"].iloc[5] / px["Close"].iloc[0]))
+    assert np.isnan(scored[scored["as_of"] == px.index[6]]["actual_return"].item())
+
+
+def test_same_day_different_horizons_are_separate():
+    hist = append_predictions(pd.DataFrame(), _preds("2020-01-02").assign(horizon=1))
+    hist = append_predictions(hist, _preds("2020-01-02").assign(horizon=5))
+    assert len(hist) == 2

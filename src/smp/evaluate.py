@@ -45,13 +45,17 @@ def regression_metrics(y_true, pred) -> dict[str, float]:
     }
 
 
-def backtest(log_returns: pd.Series, signal: pd.Series, cost: float = 0.001) -> pd.DataFrame:
-    """Long (1) or cash (0) each day.
+def backtest(log_returns: pd.Series, signal: pd.Series, cost: float = 0.001, hold_days: int = 1) -> pd.DataFrame:
+    """Long (1) or cash (0), using daily returns.
 
     signal[t] is decided at day t's close and earns log_returns[t] (the t -> t+1 move).
-    A cost is charged on every change of position.
+    With hold_days > 1 the position is only revisited every hold_days days, matching a model
+    that predicts that many days ahead. A cost is charged on every change of position.
     """
     signal = signal.reindex(log_returns.index).fillna(0).clip(0, 1)
+    if hold_days > 1:
+        rebalance = np.arange(len(signal)) % hold_days == 0
+        signal = signal.where(rebalance).ffill()
     asset = np.expm1(log_returns)
     trades = signal.diff().abs().fillna(signal.iloc[0])
     strat = signal * asset - trades * cost

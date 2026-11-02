@@ -89,14 +89,14 @@ def load_predictions() -> pd.DataFrame | None:
 
 
 @st.cache_data
-def load_metrics(ticker: str) -> dict | None:
-    p = model_dir(CFG, ticker) / "metrics.json"
+def load_metrics(ticker: str, horizon: int) -> dict | None:
+    p = model_dir(CFG, ticker, horizon) / "metrics.json"
     return json.loads(p.read_text()) if p.exists() else None
 
 
 @st.cache_data
-def load_artifact(ticker: str, name: str) -> pd.DataFrame | None:
-    p = model_dir(CFG, ticker) / name
+def load_artifact(ticker: str, horizon: int, name: str) -> pd.DataFrame | None:
+    p = model_dir(CFG, ticker, horizon) / name
     return pd.read_parquet(p) if p.exists() else None
 
 
@@ -115,6 +115,13 @@ def load_quality() -> dict:
 
 st.sidebar.title("Stock Market Predictor")
 ticker = st.sidebar.selectbox("Ticker", CFG.data.tickers)
+horizon = st.sidebar.radio(
+    "Horizon",
+    CFG.train.horizons,
+    format_func=lambda h: f"{h} trading day{'s' if h > 1 else ''} ahead",
+    horizontal=True,
+)
+H_LABEL = "next-day" if horizon == 1 else f"{horizon}-day"
 task = st.sidebar.radio(
     "Model",
     ["classifier", "regressor"],
@@ -130,7 +137,7 @@ st.sidebar.caption("Retrain with `smp run-all` (or `smp train`).")
 st.sidebar.caption("Educational project, not financial advice.")
 
 prices = load_prices(ticker)
-metrics = load_metrics(ticker)
+metrics = load_metrics(ticker, horizon)
 if prices is None:
     st.warning("No data yet. Run `smp run-all` first.")
     st.stop()
@@ -143,11 +150,13 @@ tab_overview, tab_track, tab_price, tab_model, tab_bt, tab_quality = st.tabs(
 
 with tab_overview:
     preds = load_predictions()
+    if preds is not None and "horizon" in preds:
+        preds = preds[preds["horizon"] == horizon]
     if preds is None or preds.empty:
         st.info("No predictions yet. Run `smp run-all`.")
     else:
         as_of = pd.to_datetime(preds["as_of"]).max().date()
-        st.subheader(f"Next-day predictions (based on close of {as_of})")
+        st.subheader(f"{H_LABEL.capitalize()} predictions (based on close of {as_of})")
         cols = st.columns(len(preds))
         for col, row in zip(cols, preds.itertuples(), strict=False):
             arrow = "▲ up" if row.direction == "up" else "▼ down"
@@ -165,7 +174,7 @@ with tab_overview:
             width="stretch",
         )
         st.caption(
-            "Daily stock moves are mostly noise. Hold-out ROC-AUC near 0.5 is normal; "
+            "Stock moves are mostly noise, especially day to day. Hold-out ROC-AUC near 0.5 is normal; "
             "check the Model performance tab before trusting any signal."
         )
 
@@ -181,7 +190,8 @@ with tab_track:
     if hist.empty:
         st.info("No predictions recorded yet. Run `smp predict` (or `smp run-all`).")
     else:
-        summary = summarize(hist).set_index("ticker")
+        summary = summarize(hist)
+        summary = summary[summary["horizon"] == horizon].set_index("ticker")
         st.dataframe(
             summary.style.format(
                 {
@@ -195,7 +205,7 @@ with tab_track:
             ),
             width="stretch",
         )
-        th = hist[hist["ticker"] == ticker].sort_values("as_of")
+        th = hist[(hist["ticker"] == ticker) & (hist["horizon"] == horizon)].sort_values("as_of")
         scored = th.dropna(subset=["actual_return"])
         if len(scored) < 2:
             st.info(
@@ -321,8 +331,9 @@ with tab_model:
         st.info("No trained model for this ticker. Run `smp train`.")
     else:
         m = metrics[task]
-        hold = load_artifact(ticker, "holdout_predictions.parquet")
-        st.subheader(f"{ticker} · {'direction classifier' if task == 'classifier' else 'return regressor'}")
+        hold = load_artifact(ticker, horizon, "holdout_predictions.parquet")
+        kind = "direction classifier" if task == "classifier" else "return regressor"
+        st.subheader(f"{ticker} · {H_LABEL} {kind}")
         st.write(
             f"Selected model: **{m['selected']}** (by walk-forward CV {m['selection_metric']}). "
             f"Hold-out period {metrics['holdout_period'][0]} to {metrics['holdout_period'][1]}."
@@ -385,7 +396,7 @@ with tab_model:
                 )
             )
             sc.update_layout(
-                title="Predicted vs actual next-day return (hold-out)",
+                title=f"Predicted vs actual {H_LABEL} return (hold-out)",
                 xaxis_title="Predicted",
                 yaxis_title="Actual",
                 hovermode="closest",
@@ -422,7 +433,7 @@ with tab_model:
 # --- backtest ----------------------------------------------------------------------------------
 
 with tab_bt:
-    bt = load_artifact(ticker, f"backtest_{task}.parquet")
+    bt = load_artifact(ticker, horizon, f"backtest_{task}.parquet")
     if bt is None or metrics is None:
         st.info("No backtest yet. Run `smp train`.")
     else:
@@ -433,7 +444,8 @@ with tab_bt:
             else "long when predicted return > 0"
         )
         st.subheader(f"Hold-out backtest: {rule}, else cash")
-        st.caption(f"Costs: {CFG.backtest.cost:.2%} per position change. Trades at each day's close.")
+        held = "Position reviewed every day" if horizon == 1 else f"Position held {horizon} days, then reviewed"
+        st.caption(f"{held}. Costs: {CFG.backtest.cost:.2%} per position change. Trades at the close.")
         k = st.columns(5)
         k[0].metric(
             "Strategy return",

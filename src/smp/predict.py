@@ -1,4 +1,4 @@
-"""Generate the latest next-day predictions from saved models."""
+"""Generate the latest predictions (for every horizon) from saved models."""
 
 from __future__ import annotations
 
@@ -20,10 +20,10 @@ def predictions_path(cfg: Config):
     return cfg.paths.models / "predictions.parquet"
 
 
-def predict_ticker(cfg: Config, ticker: str) -> dict | None:
-    mdir = model_dir(cfg, ticker)
+def predict_ticker(cfg: Config, ticker: str, horizon: int = 1) -> dict | None:
+    mdir = model_dir(cfg, ticker, horizon)
     if not (mdir / "metrics.json").exists() or not features_path(cfg, ticker).exists():
-        log.warning("%s: missing model or features, skipping prediction", ticker)
+        log.warning("%s %dd: missing model or features, skipping prediction", ticker, horizon)
         return None
     meta = json.loads((mdir / "metrics.json").read_text())
     cols = meta["features"]
@@ -38,6 +38,7 @@ def predict_ticker(cfg: Config, ticker: str) -> dict | None:
     p_up = float(clf.predict_proba(latest)[0, 1])
     return {
         "ticker": ticker,
+        "horizon": horizon,
         "as_of": latest.index[0],
         "p_up": p_up,
         "direction": "up" if p_up > cfg.backtest.prob_threshold else "down",
@@ -48,15 +49,16 @@ def predict_ticker(cfg: Config, ticker: str) -> dict | None:
 
 
 def predict_all(cfg: Config) -> pd.DataFrame:
-    rows = [r for t in cfg.data.tickers if (r := predict_ticker(cfg, t))]
+    rows = [r for t in cfg.data.tickers for h in cfg.train.horizons if (r := predict_ticker(cfg, t, h))]
     df = pd.DataFrame(rows)
     cfg.paths.models.mkdir(parents=True, exist_ok=True)
     df.to_parquet(predictions_path(cfg), index=False)
     update_history(cfg, df)
     for r in rows:
         log.info(
-            "%s (as of %s): P(up)=%.3f, predicted return=%+.4f%%",
+            "%s %dd (as of %s): P(up)=%.3f, predicted return=%+.4f%%",
             r["ticker"],
+            r["horizon"],
             r["as_of"].date(),
             r["p_up"],
             r["pred_return"] * 100,

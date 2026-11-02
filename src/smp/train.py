@@ -14,7 +14,7 @@ from sklearn.model_selection import TimeSeriesSplit
 
 from smp.config import Config, ticker_to_filename
 from smp.evaluate import backtest, backtest_stats, classification_metrics, regression_metrics
-from smp.features import TARGET_DIRECTION, TARGET_RETURN, feature_columns, features_path
+from smp.features import feature_columns, features_path, target_direction, target_return
 from smp.models import BASELINE, classifiers, feature_importance, regressors
 
 log = logging.getLogger(__name__)
@@ -73,36 +73,47 @@ def tune_lightgbm(task: str, X, y, splits, n_trials: int, random_state: int) -> 
     return study.best_params
 
 
-def model_dir(cfg: Config, ticker: str) -> Path:
-    return cfg.paths.models / ticker_to_filename(ticker)
+def model_dir(cfg: Config, ticker: str, horizon: int = 1) -> Path:
+    return cfg.paths.models / ticker_to_filename(ticker) / f"h{horizon}"
 
 
-def train_ticker(cfg: Config, ticker: str, feats: pd.DataFrame | None = None) -> dict:
-    """Train, select and evaluate both tasks for one ticker; save artifacts. Returns metrics."""
+def split_dev_holdout(data: pd.DataFrame, holdout_days: int, horizon: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Last `holdout_days` rows are the hold-out. The `horizon` rows before it are dropped, because
+    their labels depend on prices inside the hold-out period."""
+    hold = data.iloc[-holdout_days:]
+    dev = data.iloc[: -holdout_days - horizon] if horizon else data.iloc[:-holdout_days]
+    return dev, hold
+
+
+def train_ticker(cfg: Config, ticker: str, feats: pd.DataFrame | None = None, horizon: int = 1) -> dict:
+    """Train, select and evaluate both tasks for one ticker and horizon; save artifacts. Returns metrics."""
     if feats is None:
         feats = pd.read_parquet(features_path(cfg, ticker))
     cols = feature_columns(feats)
-    data = feats.dropna(subset=cols + [TARGET_RETURN, TARGET_DIRECTION])
+    ret_col, dir_col = target_return(horizon), target_direction(horizon)
+    data = feats.dropna(subset=[*cols, ret_col, dir_col, target_return(1)])
     tc = cfg.train
     if len(data) < tc.holdout_days + 200:
         raise ValueError(f"{ticker}: only {len(data)} usable rows; need more history")
 
-    dev, hold = data.iloc[: -tc.holdout_days], data.iloc[-tc.holdout_days :]
+    dev, hold = split_dev_holdout(data, tc.holdout_days, horizon)
     X_dev, X_hold = dev[cols], hold[cols]
-    splits = walk_forward_splits(len(dev), tc.n_splits, tc.gap)
-    out_dir = model_dir(cfg, ticker)
+    # Labels span `horizon` days, so train and test folds must be at least that far apart.
+    splits = walk_forward_splits(len(dev), tc.n_splits, max(tc.gap, horizon))
+    out_dir = model_dir(cfg, ticker, horizon)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     metrics: dict = {
         "ticker": ticker,
+        "horizon": horizon,
         "features": cols,
         "n_rows": len(data),
         "dev_period": [str(dev.index[0].date()), str(dev.index[-1].date())],
         "holdout_period": [str(hold.index[0].date()), str(hold.index[-1].date())],
     }
-    holdout_preds = pd.DataFrame({"actual_return": hold[TARGET_RETURN], "actual_direction": hold[TARGET_DIRECTION]})
+    holdout_preds = pd.DataFrame({"actual_return": hold[ret_col], "actual_direction": hold[dir_col]})
 
-    for task, target in (("classifier", TARGET_DIRECTION), ("regressor", TARGET_RETURN)):
+    for task, target in (("classifier", dir_col), ("regressor", ret_col)):
         y_dev, y_hold = dev[target], hold[target]
         lgbm_params = None
         if tc.tune:
@@ -126,8 +137,9 @@ def train_ticker(cfg: Config, ticker: str, feats: pd.DataFrame | None = None) ->
         base_cv = cv[BASELINE][metric]
         beats = cv[best][metric] > base_cv if higher else cv[best][metric] < base_cv
         log.info(
-            "%s %s: selected %s (CV %s=%.4f vs baseline %.4f; hold-out %.4f)",
+            "%s %dd %s: selected %s (CV %s=%.4f vs baseline %.4f; hold-out %.4f)",
             ticker,
+            horizon,
             task,
             best,
             metric,
@@ -146,7 +158,7 @@ def train_ticker(cfg: Config, ticker: str, feats: pd.DataFrame | None = None) ->
             signal = (holdout_preds[col] > cfg.backtest.prob_threshold).astype(float)
         else:
             signal = (holdout_preds[col] > 0).astype(float)
-        bt = backtest(hold[TARGET_RETURN], signal, cfg.backtest.cost)
+        bt = backtest(hold[target_return(1)], signal, cfg.backtest.cost, hold_days=horizon)
         bt.to_parquet(out_dir / f"backtest_{task}.parquet")
 
         metrics[task] = {
@@ -171,8 +183,10 @@ def train_all(cfg: Config) -> dict[str, dict]:
         if not features_path(cfg, ticker).exists():
             log.warning("%s: no features, skipping training", ticker)
             continue
-        try:
-            results[ticker] = train_ticker(cfg, ticker)
-        except Exception as exc:
-            log.error("%s: training failed: %s", ticker, exc)
+        feats = pd.read_parquet(features_path(cfg, ticker))
+        for h in cfg.train.horizons:
+            try:
+                results.setdefault(ticker, {})[h] = train_ticker(cfg, ticker, feats, h)
+            except Exception as exc:
+                log.error("%s %dd: training failed: %s", ticker, h, exc)
     return results

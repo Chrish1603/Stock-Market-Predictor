@@ -26,6 +26,7 @@ class DataConfig(BaseModel):
 
 
 class TrainConfig(BaseModel):
+    horizons: list[int] = Field(default_factory=lambda: [1, 5, 20])  # trading days ahead to predict
     n_splits: int = 5
     holdout_days: int = 252
     gap: int = 1

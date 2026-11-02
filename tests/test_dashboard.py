@@ -13,5 +13,9 @@ def test_dashboard_renders():
 
     at = AppTest.from_file("../app/dashboard.py", default_timeout=60).run()
     assert not at.exception, at.exception
-    at.sidebar.radio[0].set_value("regressor").run()
-    assert not at.exception, at.exception
+    horizon_radio, model_radio = at.sidebar.radio[0], at.sidebar.radio[1]
+    for h in cfg.train.horizons:
+        horizon_radio.set_value(h).run()
+        for task in ("classifier", "regressor"):
+            model_radio.set_value(task).run()
+            assert not at.exception, (h, task, at.exception)

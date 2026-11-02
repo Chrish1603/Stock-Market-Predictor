@@ -9,6 +9,7 @@ data:
   outlier_z: 6.0                     # flag daily returns beyond this z-score
 
 train:
+  horizons: [1, 5, 20]               # predict 1, 5 and 20 trading days ahead (one model set each)
   n_splits: 5                        # walk-forward folds on the development set
   holdout_days: 252                  # final ~12 months kept for out-of-sample evaluation
   gap: 1                             # rows skipped between train and test in each fold
