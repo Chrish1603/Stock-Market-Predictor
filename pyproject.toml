@@ -21,6 +21,7 @@ dependencies = [
     "typer>=0.9",
     "plotly>=5.18",
     "streamlit>=1.30",
+    "certifi",
 ]
 
 [project.optional-dependencies]

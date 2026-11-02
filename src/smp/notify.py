@@ -138,7 +138,12 @@ def send_ntfy(server: str, topic: str, title: str, text: str) -> bool:
         headers={"Title": title.encode("ascii", "ignore").decode(), "Tags": "chart_with_upwards_trend"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        import ssl
+
+        import certifi
+
+        ctx = ssl.create_default_context(cafile=certifi.where())
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
             return resp.status == 200
     except Exception as exc:  # never fail the pipeline because a notification failed
         log.warning("ntfy notification failed: %s", exc)

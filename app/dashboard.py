@@ -36,11 +36,15 @@ st.set_page_config(page_title="Stock Market Predictor", layout="wide")
 def download_snapshot(url: str) -> str:
     """Fetch and unpack a published snapshot (see `smp publish`); refreshed at most hourly."""
     import io
+    import ssl
     import tarfile
     import tempfile
     import urllib.request
 
-    with urllib.request.urlopen(url, timeout=60) as resp:
+    import certifi
+
+    ctx = ssl.create_default_context(cafile=certifi.where())  # python.org builds may lack system certificates
+    with urllib.request.urlopen(url, timeout=60, context=ctx if url.startswith("https") else None) as resp:
         payload = resp.read()
     dest = Path(tempfile.mkdtemp(prefix="smp-snapshot-")).resolve()
     with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as tar:
