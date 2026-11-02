@@ -30,3 +30,10 @@ def test_pipeline_without_network(tmp_path):
     assert set(preds["ticker"]) == {"AAA", "SPY"}
     assert preds["p_up"].between(0, 1).all()
     assert (cfg.paths.logs / "pipeline.log").exists()
+
+    from smp.history import load_history
+
+    hist = load_history(cfg)
+    assert len(hist) == 2 and hist["actual_return"].isna().all()  # latest day can't be scored yet
+    pipeline.run(cfg, ["predict"])  # re-running the same day doesn't duplicate history
+    assert len(load_history(cfg)) == 2

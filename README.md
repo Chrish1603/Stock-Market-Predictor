@@ -15,12 +15,15 @@ prices, trains models, and writes predictions. A Streamlit dashboard shows the r
 | Features | `smp.features` | 31 features per day (returns, moving-average ratios, MACD, RSI, stochastic, volatility, ATR, Bollinger %B, volume, SPY and VIX context, calendar) and two targets: next-day log return and up/down direction. |
 | Train | `smp.train` | For each ticker and target: baseline, linear model, LightGBM and XGBoost compared with walk-forward cross-validation. The best non-baseline model is evaluated on the last 12 months (hold-out) and backtested, then refit on all data. Saved to `models/<TICKER>/`. |
 | Predict | `smp.predict` | `models/predictions.parquet`: P(up) and predicted return for the next trading day. |
+| Track record | `smp.history` | Every prediction is appended to `data/history/predictions.parquet` and scored once the next close is known. Only the first prediction per ticker and day is kept, so the record can't be rewritten. |
 
 ### Avoiding misleading results
 - Features at day *t* only use data up to *t*'s close (`tests/test_features.py::test_no_lookahead`).
 - Time-ordered splits only, with a gap between train and test; scaling is fit inside each fold.
 - Every model is compared with a naive baseline (most-common class / zero return).
 - The backtest charges 0.1% per position change and is compared with buy-and-hold.
+- Today's price bar is ignored until 16:30 New York time, so features and scoring only use final closing prices.
+- Live predictions are scored on outcomes that didn't exist when they were made (`smp track-record`).
 
 ## Setup
 
@@ -39,6 +42,7 @@ smp run-all                    # ingest -> clean -> features -> train -> predict
 smp run-all --skip-train       # refresh data and predictions with existing models
 smp run-all --tune             # tune LightGBM with Optuna (pip install -e ".[tune]")
 smp ingest | clean | features | train | predict   # run a single stage
+smp track-record               # how past live predictions turned out
 
 streamlit run app/dashboard.py # open the dashboard
 ```
@@ -48,6 +52,7 @@ Logs are written to `logs/pipeline.log`.
 
 ### Dashboard
 - **Overview**: next-day prediction for each ticker.
+- **Track record**: live hit rate of past predictions vs always guessing "up", and each prediction's outcome.
 - **Price & indicators**: candlesticks with SMA 20/50 and Bollinger band, volume, RSI and MACD.
 - **Model performance**: CV and hold-out metrics for every model vs baseline, ROC curve and confusion matrix
   (direction) or predicted-vs-actual scatter (return), feature importance.

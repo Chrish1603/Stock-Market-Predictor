@@ -51,6 +51,18 @@ def predict(config: Path | None = ConfigOpt):
     pipeline.run(_cfg(config), ["predict"])
 
 
+@app.command("track-record")
+def track_record(config: Path | None = ConfigOpt):
+    """Show how past live predictions turned out."""
+    from smp.history import load_history, summarize
+
+    summary = summarize(load_history(load_config(config)))
+    if summary.empty:
+        typer.echo("No predictions recorded yet. Run `smp predict`.")
+        return
+    typer.echo(summary.to_string(index=False, float_format=lambda x: f"{x:.4f}"))
+
+
 @app.command("run-all")
 def run_all(
     config: Path | None = ConfigOpt,

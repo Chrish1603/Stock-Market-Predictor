@@ -10,6 +10,7 @@ import pandas as pd
 
 from smp.config import Config
 from smp.features import features_path
+from smp.history import update_history
 from smp.train import model_dir
 
 log = logging.getLogger(__name__)
@@ -51,6 +52,7 @@ def predict_all(cfg: Config) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     cfg.paths.models.mkdir(parents=True, exist_ok=True)
     df.to_parquet(predictions_path(cfg), index=False)
+    update_history(cfg, df)
     for r in rows:
         log.info(
             "%s (as of %s): P(up)=%.3f, predicted return=%+.4f%%",

@@ -26,3 +26,4 @@ paths:                               # relative to the project root
   features: data/processed/features
   models: models
   logs: logs
+  history: data/history              # every prediction ever made, scored once the outcome is known

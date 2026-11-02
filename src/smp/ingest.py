@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime
+from datetime import time as dtime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import yfinance as yf
@@ -16,6 +19,16 @@ log = logging.getLogger(__name__)
 OHLCV = ["Open", "High", "Low", "Close", "Volume"]
 OVERLAP_DAYS = 5  # re-fetch a few recent days to catch late revisions
 ADJUSTMENT_TOLERANCE = 0.005  # >0.5% change in stored closes => prices were re-adjusted
+MARKET_TZ = ZoneInfo("America/New_York")
+SETTLED_AFTER = dtime(16, 30)  # US close is 16:00; allow time for final prices
+
+
+def drop_incomplete_bar(df: pd.DataFrame, now: datetime | None = None) -> pd.DataFrame:
+    """Drop today's bar while the US session is still open, so only final closes are stored."""
+    now = (now or datetime.now(MARKET_TZ)).astimezone(MARKET_TZ)
+    if df.empty or now.time() >= SETTLED_AFTER:
+        return df
+    return df[df.index < pd.Timestamp(now.date())]
 
 
 def download(ticker: str, start: str, end: str | None = None, retries: int = 3) -> pd.DataFrame:
@@ -31,7 +44,7 @@ def download(ticker: str, start: str, end: str | None = None, retries: int = 3) 
                 idx = idx.tz_localize(None)
             df.index = idx.normalize()
             df.index.name = "Date"
-            return df
+            return drop_incomplete_bar(df)
         except Exception as exc:  # network / API errors
             log.warning("Download %s failed (attempt %d/%d): %s", ticker, attempt, retries, exc)
             if attempt == retries:

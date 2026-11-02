@@ -19,6 +19,7 @@ from smp import pipeline
 from smp.clean import clean_path, report_path
 from smp.config import load_config
 from smp.features import bollinger, macd, rsi
+from smp.history import load_history, summarize
 from smp.predict import predictions_path
 from smp.train import model_dir
 
@@ -100,6 +101,11 @@ def load_artifact(ticker: str, name: str) -> pd.DataFrame | None:
 
 
 @st.cache_data
+def load_track_record() -> pd.DataFrame:
+    return load_history(CFG)
+
+
+@st.cache_data
 def load_quality() -> dict:
     p = report_path(CFG)
     return json.loads(p.read_text()) if p.exists() else {}
@@ -129,8 +135,8 @@ if prices is None:
     st.warning("No data yet. Run `smp run-all` first.")
     st.stop()
 
-tab_overview, tab_price, tab_model, tab_bt, tab_quality = st.tabs(
-    ["Overview", "Price & indicators", "Model performance", "Backtest", "Data quality"]
+tab_overview, tab_track, tab_price, tab_model, tab_bt, tab_quality = st.tabs(
+    ["Overview", "Track record", "Price & indicators", "Model performance", "Backtest", "Data quality"]
 )
 
 # --- overview ----------------------------------------------------------------------------------
@@ -162,6 +168,73 @@ with tab_overview:
             "Daily stock moves are mostly noise. Hold-out ROC-AUC near 0.5 is normal; "
             "check the Model performance tab before trusting any signal."
         )
+
+# --- live track record -------------------------------------------------------------------------
+
+with tab_track:
+    hist = load_track_record()
+    st.subheader("Live track record")
+    st.caption(
+        "Every prediction is saved when it's made and scored after the next close. Unlike the hold-out test, "
+        "these were made before the outcome existed. Compare the hit rate with always guessing 'up'."
+    )
+    if hist.empty:
+        st.info("No predictions recorded yet. Run `smp predict` (or `smp run-all`).")
+    else:
+        summary = summarize(hist).set_index("ticker")
+        st.dataframe(
+            summary.style.format(
+                {
+                    "hit_rate": "{:.1%}",
+                    "always_up_hit_rate": "{:.1%}",
+                    "brier": "{:.4f}",
+                    "avg_return_when_up_call": "{:+.3%}",
+                    "avg_return_when_down_call": "{:+.3%}",
+                },
+                na_rep="–",
+            ),
+            width="stretch",
+        )
+        th = hist[hist["ticker"] == ticker].sort_values("as_of")
+        scored = th.dropna(subset=["actual_return"])
+        if len(scored) < 2:
+            st.info(
+                f"{ticker}: {len(th)} prediction(s) recorded, {len(scored)} scored so far. "
+                "The chart appears once a few days have been scored. Run the pipeline each trading day."
+            )
+        else:
+            n = np.arange(1, len(scored) + 1)
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=scored["as_of"], y=scored["correct"].cumsum() / n, name="Model", line=dict(color=C["s1"], width=2)
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=scored["as_of"],
+                    y=scored["actual_direction"].cumsum() / n,
+                    name="Always 'up'",
+                    line=dict(color=C["s2"], width=2),
+                )
+            )
+            fig.add_hline(y=0.5, line=dict(color=C["muted"], width=1, dash="dot"))
+            fig.update_layout(title=f"{ticker} cumulative hit rate")
+            fig.update_yaxes(tickformat=".0%")
+            show(style(fig, height=360))
+        if not th.empty:
+            recent = th.sort_values("as_of", ascending=False).assign(
+                as_of=lambda d: d["as_of"].dt.date,
+                target_date=lambda d: pd.to_datetime(d["target_date"]).dt.date,
+                result=lambda d: d["correct"].map({1.0: "✓ right", 0.0: "✗ wrong"}).fillna("pending"),
+            )
+            st.dataframe(
+                recent[
+                    ["as_of", "direction", "p_up", "pred_return", "target_date", "actual_return", "result"]
+                ].style.format({"p_up": "{:.1%}", "pred_return": "{:+.3%}", "actual_return": "{:+.3%}"}, na_rep="–"),
+                hide_index=True,
+                width="stretch",
+            )
 
 # --- price & indicators ------------------------------------------------------------------------
 

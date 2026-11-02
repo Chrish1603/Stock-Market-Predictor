@@ -45,6 +45,7 @@ class PathsConfig(BaseModel):
     features: Path = Path("data/processed/features")
     models: Path = Path("models")
     logs: Path = Path("logs")
+    history: Path = Path("data/history")
 
     def resolve(self, root: Path) -> PathsConfig:
         """Make every relative path absolute against `root`."""
