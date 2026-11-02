@@ -1,7 +1,41 @@
+# Dashboard theme. Colours come from the validated chart palette: blue accent (red is reserved
+# for "down" / "stressed"), warm off-white surfaces, hairline borders. Light and dark are each
+# set explicitly rather than auto-inverted.
+
 [theme]
-# Blue accent, so red stays reserved for "down" and "stressed".
 primaryColor = "#2a78d6"
-font = "sans serif"
+font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif"
+headingFontWeights = [650, 600, 600, 600, 600, 600]
+headingFontSizes = ["2.1rem", "1.45rem", "1.15rem", "1rem", "0.95rem", "0.9rem"]
+metricValueFontWeight = 600
+baseRadius = "0.65rem"
+buttonRadius = "0.5rem"
+showWidgetBorder = true
+showSidebarBorder = true
+redColor = "#d03b3b"
+greenColor = "#0ca30c"
+blueColor = "#2a78d6"
+
+[theme.light]
+backgroundColor = "#fcfcfb"
+secondaryBackgroundColor = "#f3f2ee"
+textColor = "#1a1a19"
+borderColor = "#e4e3dc"
+dataframeHeaderBackgroundColor = "#f3f2ee"
+
+[theme.light.sidebar]
+backgroundColor = "#f6f5f1"
+
+[theme.dark]
+primaryColor = "#3987e5"
+backgroundColor = "#141413"
+secondaryBackgroundColor = "#1f1f1d"
+textColor = "#f0efec"
+borderColor = "#2e2e2b"
+dataframeHeaderBackgroundColor = "#1f1f1d"
+
+[theme.dark.sidebar]
+backgroundColor = "#1a1a19"
 
 [client]
 toolbarMode = "minimal"   # hide the Deploy button

@@ -48,4 +48,4 @@ def test_risk_tab_renders():
         show.set_value(opt).run()
         assert not at.exception, (opt, at.exception)
     today = next(t for t in at.tabs if t.label == "Today")
-    assert "In plain English" in " ".join(m.value for m in today.markdown)
+    assert "card-text" in " ".join(m.value for m in today.markdown)

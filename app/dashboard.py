@@ -58,7 +58,44 @@ PALETTES = {
 }
 theme_type = getattr(getattr(st.context, "theme", None), "type", None) or "light"
 C = PALETTES["dark" if theme_type == "dark" else "light"]
-FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif'
+FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+UP_TEXT, DOWN_TEXT = ("#0ca30c", "#e66767") if theme_type == "dark" else ("#006300", "#c03030")
+
+st.markdown(
+    f"""
+    <style>
+      [data-testid="stSidebar"] h1 {{ font-size: 1.3rem; letter-spacing: -0.01em; }}
+      .block-container {{ padding-top: 2rem; padding-bottom: 3rem; max-width: 1280px; }}
+      [data-testid="stHeader"] {{ background: transparent; }}
+      h1, h2, h3 {{ letter-spacing: -0.015em; }}
+      .stTabs [data-baseweb="tab-list"] {{ gap: 1.6rem; }}
+      .stTabs [data-baseweb="tab"] {{ font-size: 0.95rem; padding-left: 0; padding-right: 0; }}
+      [data-testid="stMetricValue"] {{ letter-spacing: -0.02em; }}
+      .eyebrow {{ text-transform: uppercase; letter-spacing: 0.09em; font-size: 0.72rem; font-weight: 600;
+                 opacity: 0.6; }}
+      .muted {{ opacity: 0.65; }}
+      .hero {{ border-radius: 0.9rem; padding: 1.25rem 1.5rem; margin: 0.25rem 0 1.25rem 0; }}
+      .hero-title {{ font-size: 1.9rem; font-weight: 650; letter-spacing: -0.02em; line-height: 1.2; }}
+      .chips {{ display: flex; gap: 2.2rem; flex-wrap: wrap; margin-top: 0.9rem; }}
+      .chip-label {{ font-size: 0.75rem; opacity: 0.65; }}
+      .chip-value {{ font-size: 1.05rem; font-weight: 600; }}
+      .card-head {{ display: flex; justify-content: space-between; align-items: baseline; }}
+      .ticker {{ font-size: 1.15rem; font-weight: 650; letter-spacing: -0.01em; }}
+      .price {{ font-size: 0.95rem; opacity: 0.8; margin-left: 0.5rem; }}
+      .delta {{ font-size: 0.85rem; font-weight: 600; }}
+      .stats {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 0.25rem; }}
+      .stat-label {{ font-size: 0.74rem; opacity: 0.65; }}
+      .stat-value {{ font-size: 1.35rem; font-weight: 650; letter-spacing: -0.02em; line-height: 1.3; }}
+      .stat-note {{ font-size: 0.74rem; opacity: 0.65; margin-top: 0.15rem; }}
+      .bar {{ height: 5px; border-radius: 3px; background: rgba(128,128,128,0.18); margin-top: 0.35rem;
+              overflow: hidden; }}
+      .bar > span {{ display: block; height: 100%; border-radius: 3px; background: {C["s1"]}; }}
+      .card-text {{ font-size: 0.86rem; line-height: 1.45; margin-top: 0.75rem; opacity: 0.85; }}
+      .card-foot {{ font-size: 0.74rem; opacity: 0.55; margin-top: 0.6rem; }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 # Status colours are reserved for regime state and always shown with an icon + label.
 REGIME_STYLE = {
     "calm": ("#0ca30c", "●", "Calm"),
@@ -149,15 +186,20 @@ def as_text(df: pd.DataFrame, formats: dict[str, str]) -> pd.DataFrame:
 
 
 def style(fig: go.Figure, height: int = 420) -> go.Figure:
+    """House style: transparent background, left-aligned title, hairline grid, legend below."""
     fig.update_layout(
         height=height,
-        margin=dict(l=10, r=10, t=48, b=10),
-        font_family=FONT,
+        margin=dict(l=8, r=8, t=52, b=8),
+        font=dict(family=FONT, size=12),
+        title=dict(x=0, xanchor="left", y=0.98, yanchor="top", font=dict(size=15, family=FONT)),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         hovermode="x unified",
-        legend=dict(orientation="h", y=-0.08, yanchor="top", x=0),
+        hoverlabel=dict(font=dict(family=FONT, size=12)),
+        legend=dict(orientation="h", y=-0.1, yanchor="top", x=0, font=dict(size=12)),
     )
-    fig.update_xaxes(showgrid=False, linecolor=C["grid"])
-    fig.update_yaxes(gridcolor=C["grid"], gridwidth=1, zeroline=False)
+    fig.update_xaxes(showgrid=False, linecolor=C["grid"], tickfont=dict(color=C["muted"]), ticks="")
+    fig.update_yaxes(gridcolor=C["grid"], gridwidth=1, zeroline=False, tickfont=dict(color=C["muted"]))
     return fig
 
 
@@ -254,22 +296,27 @@ tab_model = tab_bt = tab_dir  # model performance and its backtest share one tab
 
 
 def sparkline(series: pd.Series) -> go.Figure:
-    up = series.iloc[-1] >= series.iloc[0]
+    lo, hi = float(series.min()), float(series.max())
+    pad = (hi - lo) * 0.08 or 1.0
     fig = go.Figure(
         go.Scatter(
             x=series.index,
             y=series,
             mode="lines",
-            line=dict(color=C["up"] if up else C["down"], width=2),
-            hovertemplate="%{x|%d %b}: %{y:.2f}<extra></extra>",
+            line=dict(color=C["s1"], width=2, shape="spline", smoothing=0.4),
+            fill="tozeroy",
+            fillcolor=C["band"],
+            hovertemplate="%{x|%d %b}: %{y:,.2f}<extra></extra>",
         )
     )
     fig.update_layout(
-        height=56,
-        margin=dict(l=0, r=0, t=4, b=4),
+        height=70,
+        margin=dict(l=0, r=0, t=2, b=2),
         showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(visible=False),
-        yaxis=dict(visible=False),
+        yaxis=dict(visible=False, range=[lo - pad, hi + pad]),
     )
     return fig
 
@@ -290,19 +337,41 @@ def risk_words(pct: float) -> str:
 
 
 def regime_banner(regime: dict) -> None:
+    """Hero card: regime label (icon + word, tinted with its status colour) and its three inputs."""
     color, icon, label = REGIME_STYLE[regime["regime"]]
-    breadth = f"{regime['breadth']:.0%} of stocks above their 200-day average" if regime["breadth"] is not None else ""
-    parts = [
-        f"S&P 500 volatility forecast <b>{regime['forecast_vol']:.0%}</b> "
-        f"(higher than {regime['vol_percentile']:.0%} of past days)",
-        breadth,
-        f"trend <b>{'up' if regime['trend_up'] else 'down'}</b>",
+    breadth = f"{regime['breadth']:.0%}" if regime["breadth"] is not None else "n/a"
+    chips = [
+        (
+            "S&P 500 volatility forecast",
+            f"{regime['forecast_vol']:.0%}",
+            f"{ordinal(round(regime['vol_percentile'] * 100))} percentile",
+        ),
+        ("Stocks above 200-day average", breadth, "breadth"),
+        ("S&P 500 trend", "Up" if regime["trend_up"] else "Down", "vs 200-day average"),
     ]
+    chip_html = "".join(
+        f"<div><div class='chip-label'>{a}</div><div class='chip-value'>{b} "
+        f"<span class='chip-label'>{c}</span></div></div>"
+        for a, b, c in chips
+    )
     st.markdown(
-        f"<div style='display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap'>"
-        f"<div style='font-size:2rem;font-weight:600'><span style='color:{color}'>{icon}</span> {label} market</div>"
-        f"<div style='color:{C['muted']}'>{' · '.join(x for x in parts if x)}</div></div>",
+        f"<div class='hero' style='background:{color}14;border:1px solid {color}33'>"
+        f"<div class='eyebrow'>Market regime · {regime['as_of']}</div>"
+        f"<div class='hero-title'><span style='color:{color}'>{icon}</span> {label}</div>"
+        f"<div class='chips'>{chip_html}</div></div>",
         unsafe_allow_html=True,
+    )
+
+
+def stat_html(label: str, value: str, note: str = "", bar: float | None = None) -> str:
+    bar_html = (
+        f"<div class='bar'><span style='width:{max(0.0, min(bar, 1.0)) * 100:.0f}%'></span></div>"
+        if bar is not None
+        else ""
+    )
+    return (
+        f"<div><div class='stat-label'>{label}</div><div class='stat-value'>{value}</div>{bar_html}"
+        f"<div class='stat-note'>{note}</div></div>"
     )
 
 
@@ -314,31 +383,13 @@ with tab_today:
     if rpreds is None or rpreds.empty:
         st.info("No forecasts yet. Run `smp run-all`.")
     else:
-        as_of = pd.to_datetime(rpreds["as_of"]).max().date()
-        st.caption(f"Based on the close of {as_of:%A %d %B %Y}. Educational project, not financial advice.")
         if regime:
             regime_banner(regime)
-        st.write("")
-
         h_alloc, h_dir = rc.allocation_horizon, max(CFG.train.horizons)
-        widths = [1.0, 1.4, 1.7, 1.2, 1.2, 1.3]
-        head = st.columns(widths)
-        for col, text in zip(
-            head,
-            [
-                "",
-                "Last 3 months",
-                f"Risk, next {h_alloc} days",
-                f"Chance of a {rc.drop_threshold:.0%} drop",
-                "Suggested holding",
-                f"Direction, {h_dir} days",
-            ],
-            strict=True,
-        ):
-            col.caption(text)
-
-        summaries = []
-        for t in CFG.data.tickers:
+        grid: list = []
+        for i, t in enumerate(CFG.data.tickers):
+            if i % 2 == 0:  # a new row of two cards, so cards line up across the row
+                grid = st.columns(2, gap="medium")
             r = rpreds[(rpreds["ticker"] == t) & (rpreds["horizon"] == h_alloc)]
             px_t = load_prices(t)
             if r.empty or px_t is None:
@@ -352,37 +403,14 @@ with tab_today:
             normal_drop = rmeta["drop"]["cv"]["baseline"]["drop_rate"] if rmeta else float("nan")
             d = dpreds[(dpreds["ticker"] == t) & (dpreds["horizon"] == h_dir)] if dpreds is not None else pd.DataFrame()
             dmeta = load_metrics(t, h_dir)
-
-            c = st.columns(widths, vertical_alignment="center")
-            c[0].markdown(f"**{t}**  \n{close.iloc[-1]:,.2f}")
             last = feats.iloc[-1] if feats is not None else None
             earnings_in = (
                 int(last["days_to_earnings"])
                 if last is not None and last.get("has_earnings", 0) == 1 and last["days_to_earnings"] <= 10
                 else None
             )
-            c[0].caption(
-                f"{close.iloc[-1] / close.iloc[-22] - 1:+.1%} past month"
-                + (f"  \nearnings in {earnings_in} trading day{'s' if earnings_in != 1 else ''}" if earnings_in else "")
-            )
-            c[1].plotly_chart(
-                sparkline(close.iloc[-63:]), width="stretch", config={"displayModeBar": False}, key=f"spark_{t}"
-            )
-            c[2].markdown(f"**{r.forecast_vol:.0%}** volatility")
-            if not np.isnan(pct):
-                c[2].progress(pct, text=f"{risk_words(pct)} · {ordinal(round(pct * 100))} percentile")
-            c[3].markdown(f"**{r.p_drop:.0%}**")
-            c[3].caption(f"usually {normal_drop:.0%}")
-            c[4].markdown(f"**{r.suggested_weight:.0%}**")
-            c[4].progress(min(float(r.suggested_weight), 1.0))
-            if not d.empty and dmeta:
-                d = d.iloc[0]
-                auc = dmeta["classifier"]["cv"][dmeta["classifier"]["selected"]]["roc_auc"]
-                c[5].caption(
-                    f"{'▲ up' if d.direction == 'up' else '▼ down'} {d.p_up:.0%}  \n"
-                    f"weak signal: score {auc:.2f} (0.50 = coin flip)"
-                )
 
+            # sentence
             ratio = r.p_drop / normal_drop if normal_drop else 1.0
             likely = (
                 "more likely than usual"
@@ -391,36 +419,75 @@ with tab_today:
                 if ratio < 0.8
                 else ("about as likely as usual")
             )
-            basis = "last month's" if rc.sizing_vol == "trailing" else "forecast"
+            basis = "last month's" if rc.sizing_vol == "trailing" else "the forecast"
             basis_vol = r.trailing_vol if rc.sizing_vol == "trailing" else r.forecast_vol
-            capped = " (the maximum)" if r.suggested_weight >= rc.max_weight - 1e-9 else ""
-            line = (
-                f"**{t}**: risk is {risk_words(pct)} for this stock"
+            text = (
+                f"Risk is {risk_words(pct)} for {t}"
                 + (
                     f", with earnings in {earnings_in} trading day{'s' if earnings_in != 1 else ''}"
                     if earnings_in
                     else ""
                 )
                 + f". A {rc.drop_threshold:.0%} drop is {likely}. "
-                f"Suggested holding **{r.suggested_weight:.0%}**{capped}, "
-                f"sized to {rc.target_vol:.0%} volatility using {basis} {basis_vol:.0%}."
+                f"Holding sized to {rc.target_vol:.0%} volatility using {basis} {basis_vol:.0%}."
             )
             if rc.sizing_vol == "trailing" and r.forecast_vol > 1.25 * r.trailing_vol:
                 alt = min(rc.target_vol / r.forecast_vol, rc.max_weight)
-                line += (
-                    f" The model expects more turbulence ({r.forecast_vol:.0%}); sizing on that would mean {alt:.0%}."
-                )
-            summaries.append(line)
+                text += f" The model expects more turbulence; sizing on its forecast would mean <b>{alt:.0%}</b>."
 
-        st.write("")
-        with st.container(border=True):
-            st.markdown("**In plain English**")
-            for line in summaries:
-                st.markdown(f"- {line}")
+            change = close.iloc[-1] / close.iloc[-22] - 1
+            arrow, tone = ("▲", UP_TEXT) if change >= 0 else ("▼", DOWN_TEXT)
+            direction = ""
+            if not d.empty and dmeta:
+                dd_ = d.iloc[0]
+                auc = dmeta["classifier"]["cv"][dmeta["classifier"]["selected"]]["roc_auc"]
+                direction = (
+                    f"Direction model ({h_dir} days): {'up' if dd_.direction == 'up' else 'down'} {dd_.p_up:.0%} · "
+                    f"weak signal, score {auc:.2f} where 0.50 is a coin flip"
+                )
+
+            with grid[i % 2].container(border=True):
+                st.markdown(
+                    f"<div class='card-head'><div><span class='ticker'>{t}</span>"
+                    f"<span class='price'>{close.iloc[-1]:,.2f}</span></div>"
+                    f"<div class='delta'><span style='color:{tone}'>{arrow} {abs(change):.1%}</span> "
+                    f"<span class='muted' style='font-weight:400'>past month</span></div></div>",
+                    unsafe_allow_html=True,
+                )
+                st.plotly_chart(
+                    sparkline(close.iloc[-63:]), width="stretch", config={"displayModeBar": False}, key=f"spark_{t}"
+                )
+                st.markdown(
+                    "<div class='stats'>"
+                    + stat_html(
+                        f"Volatility, next {h_alloc}d",
+                        f"{r.forecast_vol:.0%}",
+                        f"{risk_words(pct)} · {ordinal(round(pct * 100))} pct" if not np.isnan(pct) else "",
+                        pct if not np.isnan(pct) else None,
+                    )
+                    + stat_html(
+                        f"Chance of a {rc.drop_threshold:.0%} drop",
+                        f"{r.p_drop:.0%}",
+                        f"usually {normal_drop:.0%}",
+                        r.p_drop,
+                    )
+                    + stat_html(
+                        "Suggested holding",
+                        f"{r.suggested_weight:.0%}",
+                        "the maximum" if r.suggested_weight >= rc.max_weight - 1e-9 else "of a full position",
+                        r.suggested_weight / rc.max_weight,
+                    )
+                    + "</div>"
+                    + f"<div class='card-text'>{text}</div>"
+                    + (f"<div class='card-foot'>{direction}</div>" if direction else ""),
+                    unsafe_allow_html=True,
+                )
+
+        as_of = pd.to_datetime(rpreds["as_of"]).max().date()
         st.caption(
-            "How much to trust each column: volatility forecasts beat the standard baselines in testing, and drop "
-            "chances are calibrated against history. Direction calls are close to a coin flip; they are shown for "
-            "completeness. Details in the Risk & allocation and Direction models tabs."
+            f"Based on the close of {as_of:%A %d %B %Y}. Volatility forecasts beat the standard baselines in testing "
+            "and drop chances are calibrated against history; direction calls are close to a coin flip. "
+            "Educational project, not financial advice."
         )
 
 # --- risk & allocation -------------------------------------------------------------------------
