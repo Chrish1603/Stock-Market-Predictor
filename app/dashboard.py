@@ -20,7 +20,7 @@ from smp import pipeline
 from smp.allocation import allocation_path
 from smp.clean import clean_path, report_path
 from smp.config import load_config
-from smp.features import bollinger, macd, rsi
+from smp.features import bollinger, features_path, macd, rsi
 from smp.history import load_history, summarize
 from smp.predict import predictions_path
 from smp.regime import market_dir
@@ -69,10 +69,10 @@ REGIME_STYLE = {
 def style(fig: go.Figure, height: int = 420) -> go.Figure:
     fig.update_layout(
         height=height,
-        margin=dict(l=10, r=10, t=40, b=10),
+        margin=dict(l=10, r=10, t=48, b=10),
         font_family=FONT,
         hovermode="x unified",
-        legend=dict(orientation="h", y=1.02, yanchor="bottom", x=0),
+        legend=dict(orientation="h", y=-0.08, yanchor="top", x=0),
     )
     fig.update_xaxes(showgrid=False, linecolor=C["grid"])
     fig.update_yaxes(gridcolor=C["grid"], gridwidth=1, zeroline=False)
@@ -136,7 +136,9 @@ def load_quality() -> dict:
 # --- sidebar -----------------------------------------------------------------------------------
 
 st.sidebar.title("Stock Market Predictor")
-ticker = st.sidebar.selectbox("Ticker", CFG.data.tickers)
+ticker = st.sidebar.selectbox("Ticker", CFG.data.tickers, help="Used by the detail tabs")
+st.sidebar.markdown("**Direction model**")
+st.sidebar.caption("Only affects the Direction models and Track record tabs.")
 horizon = st.sidebar.radio(
     "Horizon",
     CFG.train.horizons,
@@ -164,48 +166,182 @@ if prices is None:
     st.warning("No data yet. Run `smp run-all` first.")
     st.stop()
 
-tab_overview, tab_risk, tab_track, tab_price, tab_model, tab_bt, tab_quality = st.tabs(
-    [
-        "Overview",
-        "Risk & allocation",
-        "Track record",
-        "Price & indicators",
-        "Model performance",
-        "Backtest",
-        "Data quality",
-    ]
+tab_today, tab_risk, tab_price, tab_dir, tab_track, tab_quality = st.tabs(
+    ["Today", "Risk & allocation", "Price & indicators", "Direction models", "Track record", "Data quality"]
 )
+tab_model = tab_bt = tab_dir  # model performance and its backtest share one tab
 
-# --- overview ----------------------------------------------------------------------------------
+# --- today ------------------------------------------------------------------------------------
 
-with tab_overview:
-    preds = load_predictions()
-    if preds is not None and "horizon" in preds:
-        preds = preds[preds["horizon"] == horizon]
-    if preds is None or preds.empty:
-        st.info("No predictions yet. Run `smp run-all`.")
-    else:
-        as_of = pd.to_datetime(preds["as_of"]).max().date()
-        st.subheader(f"{H_LABEL.capitalize()} predictions (based on close of {as_of})")
-        cols = st.columns(len(preds))
-        for col, row in zip(cols, preds.itertuples(), strict=False):
-            arrow = "▲ up" if row.direction == "up" else "▼ down"
-            col.metric(
-                row.ticker,
-                f"{row.p_up:.1%} P(up)",
-                f"{arrow} · {row.pred_return:+.2%} predicted",
-                delta_color="normal" if row.direction == "up" else "inverse",
-            )
-        st.dataframe(
-            preds.assign(as_of=pd.to_datetime(preds["as_of"]).dt.date).style.format(
-                {"p_up": "{:.1%}", "pred_return": "{:+.3%}"}
-            ),
-            hide_index=True,
-            width="stretch",
+
+def sparkline(series: pd.Series) -> go.Figure:
+    up = series.iloc[-1] >= series.iloc[0]
+    fig = go.Figure(
+        go.Scatter(
+            x=series.index,
+            y=series,
+            mode="lines",
+            line=dict(color=C["up"] if up else C["down"], width=2),
+            hovertemplate="%{x|%d %b}: %{y:.2f}<extra></extra>",
         )
+    )
+    fig.update_layout(
+        height=56,
+        margin=dict(l=0, r=0, t=4, b=4),
+        showlegend=False,
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+    )
+    return fig
+
+
+def ordinal(n: int) -> str:
+    suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+def risk_words(pct: float) -> str:
+    if pct >= 0.8:
+        return "well above normal"
+    if pct >= 0.6:
+        return "above normal"
+    if pct > 0.4:
+        return "normal"
+    return "below normal" if pct > 0.2 else "low"
+
+
+def regime_banner(regime: dict) -> None:
+    color, icon, label = REGIME_STYLE[regime["regime"]]
+    breadth = f"{regime['breadth']:.0%} of stocks above their 200-day average" if regime["breadth"] is not None else ""
+    parts = [
+        f"S&P 500 volatility forecast <b>{regime['forecast_vol']:.0%}</b> "
+        f"(higher than {regime['vol_percentile']:.0%} of past days)",
+        breadth,
+        f"trend <b>{'up' if regime['trend_up'] else 'down'}</b>",
+    ]
+    st.markdown(
+        f"<div style='display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap'>"
+        f"<div style='font-size:2rem;font-weight:600'><span style='color:{color}'>{icon}</span> {label} market</div>"
+        f"<div style='color:{C['muted']}'>{' · '.join(x for x in parts if x)}</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+with tab_today:
+    rc = CFG.risk
+    rpreds = load_parquet(str(risk_predictions_path(CFG)))
+    regime = load_json(str(market_dir(CFG) / "regime.json"))
+    dpreds = load_predictions()
+    if rpreds is None or rpreds.empty:
+        st.info("No forecasts yet. Run `smp run-all`.")
+    else:
+        as_of = pd.to_datetime(rpreds["as_of"]).max().date()
+        st.caption(f"Based on the close of {as_of:%A %d %B %Y}. Educational project, not financial advice.")
+        if regime:
+            regime_banner(regime)
+        st.write("")
+
+        h_alloc, h_dir = rc.allocation_horizon, max(CFG.train.horizons)
+        widths = [1.0, 1.4, 1.7, 1.2, 1.2, 1.3]
+        head = st.columns(widths)
+        for col, text in zip(
+            head,
+            [
+                "",
+                "Last 3 months",
+                f"Risk, next {h_alloc} days",
+                f"Chance of a {rc.drop_threshold:.0%} drop",
+                "Suggested holding",
+                f"Direction, {h_dir} days",
+            ],
+            strict=True,
+        ):
+            col.caption(text)
+
+        summaries = []
+        for t in CFG.data.tickers:
+            r = rpreds[(rpreds["ticker"] == t) & (rpreds["horizon"] == h_alloc)]
+            px_t = load_prices(t)
+            if r.empty or px_t is None:
+                continue
+            r = r.iloc[0]
+            close = px_t["Close"]
+            feats = load_parquet(str(features_path(CFG, t)))
+            hist_vol = (feats["vol_20"] * np.sqrt(252)).dropna() if feats is not None else pd.Series(dtype=float)
+            pct = float((hist_vol < r.forecast_vol).mean()) if len(hist_vol) else float("nan")
+            rmeta = load_json(str(risk_dir(CFG, t, h_alloc) / "metrics.json"))
+            normal_drop = rmeta["drop"]["cv"]["baseline"]["drop_rate"] if rmeta else float("nan")
+            d = dpreds[(dpreds["ticker"] == t) & (dpreds["horizon"] == h_dir)] if dpreds is not None else pd.DataFrame()
+            dmeta = load_metrics(t, h_dir)
+
+            c = st.columns(widths, vertical_alignment="center")
+            c[0].markdown(f"**{t}**  \n{close.iloc[-1]:,.2f}")
+            last = feats.iloc[-1] if feats is not None else None
+            earnings_in = (
+                int(last["days_to_earnings"])
+                if last is not None and last.get("has_earnings", 0) == 1 and last["days_to_earnings"] <= 10
+                else None
+            )
+            c[0].caption(
+                f"{close.iloc[-1] / close.iloc[-22] - 1:+.1%} past month"
+                + (f"  \nearnings in {earnings_in} trading day{'s' if earnings_in != 1 else ''}" if earnings_in else "")
+            )
+            c[1].plotly_chart(
+                sparkline(close.iloc[-63:]), width="stretch", config={"displayModeBar": False}, key=f"spark_{t}"
+            )
+            c[2].markdown(f"**{r.forecast_vol:.0%}** volatility")
+            if not np.isnan(pct):
+                c[2].progress(pct, text=f"{risk_words(pct)} · {ordinal(round(pct * 100))} percentile")
+            c[3].markdown(f"**{r.p_drop:.0%}**")
+            c[3].caption(f"usually {normal_drop:.0%}")
+            c[4].markdown(f"**{r.suggested_weight:.0%}**")
+            c[4].progress(min(float(r.suggested_weight), 1.0))
+            if not d.empty and dmeta:
+                d = d.iloc[0]
+                auc = dmeta["classifier"]["cv"][dmeta["classifier"]["selected"]]["roc_auc"]
+                c[5].caption(
+                    f"{'▲ up' if d.direction == 'up' else '▼ down'} {d.p_up:.0%}  \n"
+                    f"weak signal: score {auc:.2f} (0.50 = coin flip)"
+                )
+
+            ratio = r.p_drop / normal_drop if normal_drop else 1.0
+            likely = (
+                "more likely than usual"
+                if ratio > 1.2
+                else "less likely than usual"
+                if ratio < 0.8
+                else ("about as likely as usual")
+            )
+            basis = "last month's" if rc.sizing_vol == "trailing" else "forecast"
+            basis_vol = r.trailing_vol if rc.sizing_vol == "trailing" else r.forecast_vol
+            capped = " (the maximum)" if r.suggested_weight >= rc.max_weight - 1e-9 else ""
+            line = (
+                f"**{t}**: risk is {risk_words(pct)} for this stock"
+                + (
+                    f", with earnings in {earnings_in} trading day{'s' if earnings_in != 1 else ''}"
+                    if earnings_in
+                    else ""
+                )
+                + f". A {rc.drop_threshold:.0%} drop is {likely}. "
+                f"Suggested holding **{r.suggested_weight:.0%}**{capped}, "
+                f"sized to {rc.target_vol:.0%} volatility using {basis} {basis_vol:.0%}."
+            )
+            if rc.sizing_vol == "trailing" and r.forecast_vol > 1.25 * r.trailing_vol:
+                alt = min(rc.target_vol / r.forecast_vol, rc.max_weight)
+                line += (
+                    f" The model expects more turbulence ({r.forecast_vol:.0%}); sizing on that would mean {alt:.0%}."
+                )
+            summaries.append(line)
+
+        st.write("")
+        with st.container(border=True):
+            st.markdown("**In plain English**")
+            for line in summaries:
+                st.markdown(f"- {line}")
         st.caption(
-            "Stock moves are mostly noise, especially day to day. Hold-out ROC-AUC near 0.5 is normal; "
-            "check the Model performance tab before trusting any signal."
+            "How much to trust each column: volatility forecasts beat the standard baselines in testing, and drop "
+            "chances are calibrated against history. Direction calls are close to a coin flip; they are shown for "
+            "completeness. Details in the Risk & allocation and Direction models tabs."
         )
 
 # --- risk & allocation -------------------------------------------------------------------------
@@ -225,30 +361,14 @@ with tab_risk:
     if not rc.enabled or rpreds is None:
         st.info("No risk forecasts yet. Run `smp run-all`.")
     else:
-        # Market regime
+        # Risk forecasts per ticker
         if regime:
-            color, icon, label = REGIME_STYLE[regime["regime"]]
-            left, right = st.columns([1, 2])
-            left.markdown(
-                f"<div style='font-size:0.9rem;color:{C['muted']}'>Market regime ({regime['ticker']}, "
-                f"{regime['as_of']})</div><div style='font-size:2.2rem;font-weight:600'>"
-                f"<span style='color:{color}'>{icon}</span> {label}</div>",
-                unsafe_allow_html=True,
-            )
-            breadth = f"{regime['breadth']:.0%}" if regime["breadth"] is not None else "n/a"
-            right.markdown(
-                f"- 20-day vol forecast **{regime['forecast_vol']:.0%}**, higher than "
-                f"**{regime['vol_percentile']:.0%}** of past days\n"
-                f"- Breadth: **{breadth}** of stocks above their 200-day average\n"
-                f"- Trend: {regime['ticker']} is **{'above' if regime['trend_up'] else 'below'}** its 200-day average"
-            )
+            regime_banner(regime)
             st.caption(
                 "Stressed = vol forecast in its top 20%, or weak breadth in a downtrend. Calm = vol in its bottom 40% "
                 "with healthy breadth in an uptrend. A risk signal, not a sell signal: returns after stressed days "
                 "were on average higher (rebounds), but swings were much larger."
             )
-
-        # Risk forecasts per ticker
         st.subheader("Risk forecasts")
         rh = st.radio(
             "Risk horizon",
@@ -282,6 +402,8 @@ with tab_risk:
         if all(x is not None for x in oos_parts) and rmeta:
             oos = pd.concat(oos_parts).sort_index()
             oos = oos[~oos.index.duplicated(keep="last")]
+            if not st.toggle("Show full history (2013 onwards)", key="vol_full"):
+                oos = oos.loc[oos.index[-1] - pd.DateOffset(years=2) :]
             vm = rmeta["vol"]
             fig = go.Figure()
             for col, name, color, width in (
@@ -297,6 +419,8 @@ with tab_risk:
             show(style(fig, height=380))
             sel = vm["selected"]
             st.caption(
+                "Last month's volatility (orange) reacts late: it stays high after turbulence ends and low as it "
+                "starts. The forecast (blue) adjusts sooner. "
                 f"Walk-forward CV R² on log volatility: forecast {vm['cv'][sel]['r2']:.2f}, HAR "
                 f"{vm['cv']['har']['r2']:.2f}, last month's vol {vm['cv']['persistence']['r2']:.2f}. "
                 f"Average error {vm['cv'][sel]['mae_vol_points']:.1%} points."
@@ -324,7 +448,9 @@ with tab_risk:
                     )
                 )
             eq.update_layout(title="Growth of $1 (log scale)")
-            eq.update_yaxes(type="log", tickprefix="$")
+            top = float(curves[[f"{s}_equity" for s in SHOWN_STRATEGIES]].max().max())
+            ticks = [v for v in (0.5, 1, 2, 5, 10, 20, 50, 100, 200) if v <= top * 1.2]
+            eq.update_yaxes(type="log", tickvals=ticks, ticktext=[f"${v:g}" for v in ticks], minor=dict(showgrid=False))
             dd.update_layout(title="Drawdown from peak")
             dd.update_yaxes(tickformat=".0%")
             show(style(eq, height=380))
@@ -540,6 +666,10 @@ with tab_price:
 # --- model performance -------------------------------------------------------------------------
 
 with tab_model:
+    st.caption(
+        "Up/down and return models for the horizon and model type picked in the sidebar. In testing these are "
+        "close to a coin flip, so treat them as an experiment, not a signal."
+    )
     if metrics is None:
         st.info("No trained model for this ticker. Run `smp train`.")
     else:
@@ -653,6 +783,7 @@ with tab_model:
 # --- backtest ----------------------------------------------------------------------------------
 
 with tab_bt:
+    st.divider()
     bt = load_artifact(ticker, horizon, f"backtest_{task}.parquet")
     if bt is None or metrics is None:
         st.info("No backtest yet. Run `smp train`.")
