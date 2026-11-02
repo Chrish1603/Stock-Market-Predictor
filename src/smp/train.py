@@ -177,7 +177,11 @@ def train_ticker(cfg: Config, ticker: str, feats: pd.DataFrame | None = None, ho
     return metrics
 
 
-def train_all(cfg: Config) -> dict[str, dict]:
+def train_all(cfg: Config) -> dict:
+    if cfg.train.scope == "pooled":
+        from smp.pooled import train_all_pooled
+
+        return train_all_pooled(cfg)
     results = {}
     for ticker in cfg.data.tickers:
         if not features_path(cfg, ticker).exists():

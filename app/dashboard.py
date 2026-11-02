@@ -334,8 +334,15 @@ with tab_model:
         hold = load_artifact(ticker, horizon, "holdout_predictions.parquet")
         kind = "direction classifier" if task == "classifier" else "return regressor"
         st.subheader(f"{ticker} · {H_LABEL} {kind}")
+        if metrics.get("scope") == "pooled":
+            scope_note = (
+                f"Pooled model shared by all {metrics['n_training_tickers']} stocks, picked by CV across all of them. "
+                f"Scores below are for {ticker} only."
+            )
+        else:
+            scope_note = f"Model trained on {ticker} only."
         st.write(
-            f"Selected model: **{m['selected']}** (by walk-forward CV {m['selection_metric']}). "
+            f"Selected model: **{m['selected']}** (by walk-forward CV {m['selection_metric']}). {scope_note} "
             f"Hold-out period {metrics['holdout_period'][0]} to {metrics['holdout_period'][1]}."
         )
         if m["beats_baseline_cv"]:
