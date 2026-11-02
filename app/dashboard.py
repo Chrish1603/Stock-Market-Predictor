@@ -7,6 +7,7 @@ Reads pipeline outputs only; training happens in the pipeline (`smp run-all`).
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -29,6 +30,44 @@ from smp.risk import risk_dir, risk_predictions_path
 from smp.train import model_dir
 
 st.set_page_config(page_title="Stock Market Predictor", layout="wide")
+
+
+@st.cache_resource(ttl=3600, show_spinner="Downloading the latest data snapshot...")
+def download_snapshot(url: str) -> str:
+    """Fetch and unpack a published snapshot (see `smp publish`); refreshed at most hourly."""
+    import io
+    import tarfile
+    import tempfile
+    import urllib.request
+
+    with urllib.request.urlopen(url, timeout=60) as resp:
+        payload = resp.read()
+    dest = Path(tempfile.mkdtemp(prefix="smp-snapshot-")).resolve()
+    with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as tar:
+        for member in tar.getmembers():  # only plain files and folders, only inside dest
+            target = (dest / member.name).resolve()
+            if not (member.isfile() or member.isdir()) or (dest not in target.parents and target != dest):
+                continue
+            tar.extract(member, dest)
+    return str(next(dest.rglob("manifest.json")).parent)
+
+
+def choose_data_root() -> bool:
+    """Use local pipeline output if present; otherwise the published snapshot. True means snapshot mode."""
+    if os.environ.get("SMP_DATA_ROOT") and not os.environ.get("SMP_SNAPSHOT"):
+        return False  # set explicitly by the user
+    os.environ.pop("SMP_DATA_ROOT", None)
+    local = load_config()
+    forced = os.environ.get("SMP_SNAPSHOT_URL")  # always use this snapshot (hosting, testing)
+    url = forced or local.dashboard.data_url
+    if not url or (not forced and (local.paths.models / "risk_predictions.parquet").exists()):
+        return False
+    os.environ["SMP_DATA_ROOT"] = download_snapshot(url)
+    os.environ["SMP_SNAPSHOT"] = "1"
+    return True
+
+
+SNAPSHOT = choose_data_root()
 CFG = load_config()
 
 # --- colours: validated reference palette, stepped separately for light and dark -------------
@@ -265,7 +304,10 @@ ticker = st.sidebar.selectbox("Stock", CFG.data.tickers, help="Used by the Price
 _latest = load_prices(CFG.data.tickers[0])
 if _latest is not None:
     st.sidebar.markdown(f"**Data as of** {_latest.index[-1]:%a %d %b %Y}")
-if st.sidebar.button(
+if SNAPSHOT:
+    built = (load_json(str(Path(os.environ["SMP_DATA_ROOT"]) / "manifest.json")) or {}).get("generated_at", "?")
+    st.sidebar.caption(f"Hosted snapshot, rebuilt each US trading day (last {built[:16].replace('T', ' ')} UTC).")
+elif st.sidebar.button(
     "Refresh data", help="Downloads new prices and updates forecasts. Does not retrain.", width="stretch"
 ):
     with st.spinner("Downloading prices and updating forecasts..."):

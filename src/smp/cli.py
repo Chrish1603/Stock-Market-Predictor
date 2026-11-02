@@ -74,6 +74,20 @@ def run_all(
     pipeline.run_all(_cfg(config, tune), skip_ingest=skip_ingest, skip_train=skip_train)
 
 
+@app.command()
+def publish(
+    out: Path = typer.Option(Path("site-data"), help="Folder to write the dashboard snapshot to."),
+    config: Path | None = ConfigOpt,
+):
+    """Write a small data snapshot that a hosted dashboard can read (SMP_DATA_ROOT=<out>)."""
+    from smp.config import data_root
+    from smp.publish import build_snapshot
+
+    cfg = _cfg(config)
+    m = build_snapshot(cfg, out, data_root())
+    typer.echo(f"Wrote {m['files']} files ({m['bytes'] / 1e6:.1f} MB), data as of {m['as_of']}, to {out}")
+
+
 experiment_app = typer.Typer(help="Compare config variants with confidence intervals.", no_args_is_help=True)
 app.add_typer(experiment_app, name="experiment")
 

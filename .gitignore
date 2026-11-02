@@ -9,3 +9,4 @@ models/
 logs/
 .DS_Store
 experiments/runs/
+site-data/

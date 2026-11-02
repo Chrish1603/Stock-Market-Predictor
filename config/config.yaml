@@ -65,3 +65,12 @@ paths:                               # relative to the project root
   models: models
   logs: logs
   history: data/history              # every prediction ever made, scored once the outcome is known
+
+dashboard:
+  # A hosted dashboard with no local pipeline output downloads this snapshot (built daily by
+  # GitHub Actions with `smp publish`). Local runs use local data and ignore this.
+  data_url: https://github.com/Chrish1603/Stock-Market-Predictor/archive/refs/heads/dashboard-data.tar.gz
+
+notify:
+  macos: false                       # desktop notification after each local run
+  ntfy_topic: null                   # set to a private topic name to get phone pushes via ntfy.sh

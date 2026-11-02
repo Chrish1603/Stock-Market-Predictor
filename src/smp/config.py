@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -76,12 +77,31 @@ class PathsConfig(BaseModel):
         return PathsConfig(**{k: (v if v.is_absolute() else root / v) for k, v in self})
 
 
+class NotifyConfig(BaseModel):
+    macos: bool = False  # desktop notification after each local run
+    ntfy_topic: str | None = None  # push to phones via https://ntfy.sh/<topic> (opt-in, public service)
+    ntfy_server: str = "https://ntfy.sh"
+
+
+class DashboardConfig(BaseModel):
+    # Where a hosted dashboard downloads its data snapshot when no local pipeline output exists
+    data_url: str | None = None
+
+
 class Config(BaseModel):
     data: DataConfig = Field(default_factory=DataConfig)
     train: TrainConfig = Field(default_factory=TrainConfig)
     backtest: BacktestConfig = Field(default_factory=BacktestConfig)
     risk: RiskConfig = Field(default_factory=RiskConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)
+    notify: NotifyConfig = Field(default_factory=NotifyConfig)
+    dashboard: DashboardConfig = Field(default_factory=DashboardConfig)
+
+
+def data_root() -> Path:
+    """Base for relative data/model paths: SMP_DATA_ROOT if set (e.g. a published snapshot), else the project."""
+    root = os.environ.get("SMP_DATA_ROOT")
+    return Path(root) if root else PROJECT_ROOT
 
 
 def load_config(path: str | Path | None = None) -> Config:
@@ -90,7 +110,7 @@ def load_config(path: str | Path | None = None) -> Config:
     with open(path) as f:
         raw = yaml.safe_load(f) or {}
     cfg = Config(**raw)
-    cfg.paths = cfg.paths.resolve(PROJECT_ROOT)
+    cfg.paths = cfg.paths.resolve(data_root())
     return cfg
 
 
