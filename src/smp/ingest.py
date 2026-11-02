@@ -161,6 +161,6 @@ def ingest_all(cfg: Config) -> dict[str, int]:
             log.error("%s: ingest failed: %s", ticker, exc)
             results[ticker] = -1
     if cfg.data.earnings:
-        for ticker in cfg.data.tickers:
+        for ticker in cfg.data.feature_tickers:
             ingest_earnings(cfg, ticker)
     return results

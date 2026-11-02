@@ -99,3 +99,29 @@ def test_earnings_features():
     assert f["days_to_earnings"].max() <= MAX_DAYS_TO_EARNINGS
     assert f.loc["2024-03-29", "days_to_earnings"] == MAX_DAYS_TO_EARNINGS  # nothing scheduled
     assert f.loc["2024-01-02", "days_since_earnings"] == MAX_DAYS_SINCE_EARNINGS
+
+
+def test_fill_earnings_gives_funds_neutral_values(ohlcv):
+    from smp.features import EARNINGS_DEFAULTS, fill_earnings
+
+    fund = fill_earnings(build_features(ohlcv))
+    assert fund["has_earnings"].eq(0).all()
+    for col, default in EARNINGS_DEFAULTS.items():
+        assert fund[col].eq(default).all()
+    earn = pd.DataFrame({"reaction_date": [ohlcv.index[100]], "surprise_pct": [2.0]})
+    stock = fill_earnings(build_features(ohlcv, earnings=earn))
+    assert stock["has_earnings"].eq(1).all() and stock[list(EARNINGS_DEFAULTS)].notna().all().all()
+
+
+def test_cross_sectional_ranks():
+    from smp.features import RANKED, add_cross_sectional_ranks
+
+    frames = {f"T{i}": build_features(make_ohlcv(n=300, seed=i)) for i in range(12)}
+    frames["T0"] = frames["T0"].iloc[50:]  # shorter history must still align by date
+    ranked = add_cross_sectional_ranks(frames)
+    day = ranked["T1"].index[250]
+    vals = pd.Series({t: f.at[day, "ret_20"] for t, f in frames.items()})
+    ranks = pd.Series({t: f.at[day, "xs_rank_ret_20"] for t, f in ranked.items()})
+    assert ranks.idxmax() == vals.idxmax() and ranks.max() == 1.0
+    assert all(f"xs_rank_{c}" in ranked["T0"] for c in RANKED)
+    assert len(ranked["T0"]) == 250

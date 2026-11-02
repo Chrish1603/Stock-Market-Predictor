@@ -10,6 +10,19 @@ data:
   #   sectors: {AAPL: XLK, MSFT: XLK, NVDA: SMH}
   sectors: {}                        # sector fund per stock (relative-strength features)
   earnings: true                     # earnings-date features for stocks (skipped for ETFs)
+  # Extra stocks used only as training data for the pooled model (train.scope: pooled).
+  # Large US companies with history back to 2010, across sectors. Note: picking today's large
+  # companies favours past winners (survivorship bias), which can flatter long-run backtests.
+  universe: [
+    GOOGL, AMZN, ORCL, CSCO, INTC, ADBE, CRM, QCOM, TXN, AMD, IBM, AVGO,   # tech
+    JPM, BAC, WFC, GS, MS, C, AXP, BLK,                                    # financials
+    JNJ, PFE, MRK, UNH, ABT, LLY, AMGN, BMY, TMO, MDT,                     # health care
+    PG, KO, PEP, WMT, HD, MCD, NKE, COST, SBUX, DIS, LOW, TGT,             # consumer
+    CAT, BA, HON, GE, MMM, UPS, UNP, LMT, DE,                              # industrials
+    XOM, CVX, COP, SLB,                                                    # energy
+    NEE, DUK, T, VZ,                                                       # utilities, telecom
+  ]
+  cross_sectional: true              # rank momentum/volatility across all tickers each day
   start: "2010-01-01"
   end: null                          # null = up to today
   ffill_limit: 2                     # max consecutive missing values to forward-fill

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -16,19 +17,27 @@ class DataConfig(BaseModel):
     market_tickers: list[str] = Field(default_factory=lambda: ["SPY", "^VIX"])
     sectors: dict[str, str] = Field(default_factory=dict)  # ticker -> sector fund, e.g. AAPL: XLK
     earnings: bool = True  # download earnings dates for modelled tickers (ETFs have none)
+    universe: list[str] = Field(default_factory=list)  # extra stocks used only as training data
+    cross_sectional: bool = True  # rank features across all tickers each day (needs a universe)
     start: str = "2010-01-01"
     end: str | None = None
     ffill_limit: int = 2
     outlier_z: float = 6.0
 
     @property
+    def feature_tickers(self) -> list[str]:
+        """Tickers that get feature files: the ones we predict plus the training universe."""
+        return list(dict.fromkeys(self.tickers + self.universe))
+
+    @property
     def all_tickers(self) -> list[str]:
-        """Modelled, market-context and sector tickers, without duplicates."""
-        return list(dict.fromkeys(self.tickers + self.market_tickers + list(self.sectors.values())))
+        """Every ticker to download, without duplicates."""
+        return list(dict.fromkeys(self.feature_tickers + self.market_tickers + list(self.sectors.values())))
 
 
 class TrainConfig(BaseModel):
     horizons: list[int] = Field(default_factory=lambda: [1, 5, 20])  # trading days ahead to predict
+    scope: Literal["per_ticker", "pooled"] = "per_ticker"  # one model per ticker, or one shared model
     n_splits: int = 5
     holdout_days: int = 252
     gap: int = 1

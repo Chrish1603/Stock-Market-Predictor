@@ -206,8 +206,40 @@ def features_path(cfg: Config, ticker: str):
     return cfg.paths.features / f"{ticker_to_filename(ticker)}.parquet"
 
 
+EARNINGS_DEFAULTS = {
+    "days_to_earnings": MAX_DAYS_TO_EARNINGS,
+    "days_since_earnings": MAX_DAYS_SINCE_EARNINGS,
+    "last_eps_surprise": 0.0,
+}
+RANKED = ["ret_5", "ret_20", "sma_ratio_50", "vol_20", "rsi_14", "volume_z", "atr_14"]
+MIN_TICKERS_FOR_RANKS = 10
+
+
+def fill_earnings(feats: pd.DataFrame) -> pd.DataFrame:
+    """Give tickers without earnings (funds) neutral values, so every ticker has the same columns."""
+    feats = feats.copy()
+    feats["has_earnings"] = float("days_to_earnings" in feats)
+    for col, default in EARNINGS_DEFAULTS.items():
+        feats[col] = feats[col].fillna(default) if col in feats else float(default)
+    return feats
+
+
+def add_cross_sectional_ranks(frames: dict[str, pd.DataFrame]) -> dict[str, pd.DataFrame]:
+    """Add each ticker's percentile rank among all tickers on the same day (0 = lowest, 1 = highest).
+
+    Uses only same-day values, so it adds no lookahead.
+    """
+    out = {t: f.copy() for t, f in frames.items()}
+    for col in RANKED:
+        wide = pd.DataFrame({t: f[col] for t, f in frames.items() if col in f})
+        ranks = wide.rank(axis=1, pct=True)
+        for t in wide.columns:
+            out[t][f"xs_rank_{col}"] = ranks[t].reindex(out[t].index)
+    return out
+
+
 def build_all(cfg: Config) -> dict[str, int]:
-    """Build feature files for every modelled ticker from the cleaned data."""
+    """Build feature files for the predicted tickers and the training universe."""
     cfg.paths.features.mkdir(parents=True, exist_ok=True)
     market = {}
     for t in cfg.data.market_tickers:
@@ -217,8 +249,8 @@ def build_all(cfg: Config) -> dict[str, int]:
         else:
             log.warning("market ticker %s has no clean data; its features are skipped", t)
 
-    counts: dict[str, int] = {}
-    for ticker in cfg.data.tickers:
+    frames: dict[str, pd.DataFrame] = {}
+    for ticker in cfg.data.feature_tickers:
         p = clean_path(cfg, ticker)
         if not p.exists():
             log.warning("%s: no clean data, skipping features", ticker)
@@ -229,7 +261,15 @@ def build_all(cfg: Config) -> dict[str, int]:
         ep = earnings_path(cfg, ticker)
         earnings = pd.read_parquet(ep) if cfg.data.earnings and ep.exists() else None
         feats = build_features(pd.read_parquet(p), market, cfg.train.horizons, sector, earnings)
+        frames[ticker] = fill_earnings(feats) if cfg.data.earnings else feats
+
+    if cfg.data.cross_sectional and len(frames) >= MIN_TICKERS_FOR_RANKS:
+        frames = add_cross_sectional_ranks(frames)
+
+    counts: dict[str, int] = {}
+    for ticker, feats in frames.items():
         feats.to_parquet(features_path(cfg, ticker))
         counts[ticker] = len(feats)
-        log.info("%s: %d feature rows, %d features", ticker, len(feats), len(feature_columns(feats)))
+    n_cols = {len(feature_columns(f)) for f in frames.values()}
+    log.info("features for %d tickers, %s features each", len(frames), "/".join(map(str, sorted(n_cols))))
     return counts
