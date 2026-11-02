@@ -30,6 +30,10 @@ data:
 
 train:
   horizons: [1, 5, 20]               # predict 1, 5 and 20 trading days ahead (one model set each)
+  # per_ticker: one model per stock. pooled: one shared model trained on tickers + universe.
+  # Tested Nov 2026 on the 4 tickers (mean CV / hold-out ROC-AUC): per_ticker 0.5181 / 0.5251,
+  # pooled 0.5051 / 0.5548. Pooled was worse across CV years, so per_ticker is the default.
+  scope: per_ticker
   n_splits: 5                        # walk-forward folds on the development set
   holdout_days: 252                  # final ~12 months kept for out-of-sample evaluation
   gap: 1                             # rows skipped between train and test in each fold

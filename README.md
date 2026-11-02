@@ -109,6 +109,22 @@ Mean walk-forward CV ROC-AUC (0.5 = guessing):
 Rates and sector funds added noise, so they're off by default. Turn them back on in
 [config/config.yaml](config/config.yaml). The differences are small (under 0.005), so re-test after changing tickers.
 
+### Per-stock vs pooled models
+
+`train.scope: pooled` trains one shared model per horizon on all 63 stocks (the 4 predicted tickers plus a
+59-stock universe), with date-based splits so no day sits on both sides of a train/test boundary. Scored on the
+4 predicted tickers (mean ROC-AUC over 12 models):
+
+| Scope | CV (2010-2025) | Hold-out (last 12 months) |
+|---|---|---|
+| Per-stock (default) | **0.5181** | 0.5251 |
+| Pooled, 63 stocks | 0.5051 | **0.5548** |
+
+Pooled is better in the single hold-out year but clearly worse across the CV years, so per-stock stays the
+default. A pooled model mostly learns market-wide moves, which are the hardest part to predict; predicting each
+stock's return relative to the market is the natural next experiment. The universe lists today's large companies,
+which favours past winners (survivorship bias).
+
 ## Tests
 
 ```bash
