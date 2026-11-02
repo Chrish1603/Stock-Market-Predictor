@@ -192,7 +192,7 @@ def train_risk_ticker(cfg: Config, ticker: str, feats: pd.DataFrame, horizon: in
         # beats the historical drop rate, use the historical rate.
         ("drop", drop_col, drop_models(rs, horizon, thr), BASELINE_DROP, ("brier", False), True),
     ):
-        cv, ho, oof_pred, ho_pred = {}, {}, {}, {}
+        cv, cv_folds, ho, oof_pred, ho_pred = {}, {}, {}, {}, {}
         for name, model in candidates.items():
             folds, preds = [], []
             for tr, te in splits:
@@ -200,6 +200,7 @@ def train_risk_ticker(cfg: Config, ticker: str, feats: pd.DataFrame, horizon: in
                 p = _predict(m, task, dev.iloc[te][cols])
                 folds.append(_score(task, dev.iloc[te][target], p))
                 preds.append(p)
+            cv_folds[name] = folds
             cv[name] = {k: float(np.nanmean([f[k] for f in folds])) for k in folds[0]}
             oof_pred[name] = np.concatenate(preds)
             m = clone(model).fit(dev[cols], dev[target])
@@ -230,6 +231,7 @@ def train_risk_ticker(cfg: Config, ticker: str, feats: pd.DataFrame, horizon: in
             "selected": best,
             "selection_metric": metric,
             "cv": cv,
+            "cv_folds": cv_folds,
             "holdout": ho,
             "beats_baseline_cv": bool(
                 cv[best][metric] < cv[baseline][metric] if not higher else cv[best][metric] > cv[baseline][metric]

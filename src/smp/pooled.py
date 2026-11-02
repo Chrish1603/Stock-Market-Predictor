@@ -119,7 +119,7 @@ def train_pooled(cfg: Config, horizon: int, panel: pd.DataFrame | None = None) -
 
     for task, target in (("classifier", dir_col), ("regressor", ret_col)):
         candidates = (classifiers if task == "classifier" else regressors)(tc.random_state)
-        cv_pooled, cv_ticker, ho_pooled, ho_ticker, ho_pred = {}, {}, {}, {}, {}
+        cv_pooled, cv_ticker, cv_ticker_folds, ho_pooled, ho_ticker, ho_pred = {}, {}, {}, {}, {}, {}
         for name, model in candidates.items():
             fold_pooled, fold_ticker = [], {t: [] for t in targets}
             for tr, te in splits:
@@ -132,6 +132,7 @@ def train_pooled(cfg: Config, horizon: int, panel: pd.DataFrame | None = None) -
                     fold_ticker[t].append(_safe_score(task, test.loc[mask, target], pred[mask]))
             cv_pooled[name] = _mean_scores(fold_pooled)
             cv_ticker[name] = {t: _mean_scores(fold_ticker[t]) for t in targets}
+            cv_ticker_folds[name] = {t: [f or {} for f in fold_ticker[t]] for t in targets}
 
             m = clone(model).fit(dev[cols], dev[target])
             pred = _predict(m, task, hold[cols])
@@ -180,6 +181,7 @@ def train_pooled(cfg: Config, horizon: int, panel: pd.DataFrame | None = None) -
                 "beats_baseline_cv": bool(mine > base if higher else mine < base),
                 "lgbm_params": None,
                 "cv": cv_t,
+                "cv_folds": {n: cv_ticker_folds[n][t] for n in candidates},
                 "holdout": {n: ho_ticker[n][t] for n in candidates},
                 "backtest": backtest_stats(bt),
                 "feature_importance": importance,

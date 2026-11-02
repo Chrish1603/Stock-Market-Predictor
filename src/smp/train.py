@@ -37,12 +37,20 @@ def _score(task: str, y, pred) -> dict[str, float]:
     return classification_metrics(y, pred) if task == "classifier" else regression_metrics(y, pred)
 
 
-def cross_validate(model, task: str, X: pd.DataFrame, y: pd.Series, splits) -> dict[str, float]:
-    """Mean metrics across walk-forward folds."""
-    fold_scores = [
+def cross_validate_folds(model, task: str, X: pd.DataFrame, y: pd.Series, splits) -> list[dict[str, float]]:
+    """Metrics for each walk-forward fold (kept so experiments can compare variants fold by fold)."""
+    return [
         _score(task, y.iloc[te], _fit_predict(model, task, X.iloc[tr], y.iloc[tr], X.iloc[te])) for tr, te in splits
     ]
+
+
+def mean_scores(fold_scores: list[dict[str, float]]) -> dict[str, float]:
     return {k: float(np.nanmean([s[k] for s in fold_scores])) for k in fold_scores[0]}
+
+
+def cross_validate(model, task: str, X: pd.DataFrame, y: pd.Series, splits) -> dict[str, float]:
+    """Mean metrics across walk-forward folds."""
+    return mean_scores(cross_validate_folds(model, task, X, y, splits))
 
 
 def tune_lightgbm(task: str, X, y, splits, n_trials: int, random_state: int) -> dict:
@@ -121,9 +129,10 @@ def train_ticker(cfg: Config, ticker: str, feats: pd.DataFrame | None = None, ho
             log.info("%s %s: tuned LightGBM params %s", ticker, task, lgbm_params)
         candidates = (classifiers if task == "classifier" else regressors)(tc.random_state, lgbm_params)
 
-        cv, hold_scores, hold_raw = {}, {}, {}
+        cv, cv_folds, hold_scores, hold_raw = {}, {}, {}, {}
         for name, model in candidates.items():
-            cv[name] = cross_validate(model, task, X_dev, y_dev, splits)
+            cv_folds[name] = cross_validate_folds(model, task, X_dev, y_dev, splits)
+            cv[name] = mean_scores(cv_folds[name])
             hold_raw[name] = _fit_predict(model, task, X_dev, y_dev, X_hold)
             hold_scores[name] = _score(task, y_hold, hold_raw[name])
 
@@ -167,6 +176,7 @@ def train_ticker(cfg: Config, ticker: str, feats: pd.DataFrame | None = None, ho
             "beats_baseline_cv": bool(beats),
             "lgbm_params": lgbm_params,
             "cv": cv,
+            "cv_folds": cv_folds,
             "holdout": hold_scores,
             "backtest": backtest_stats(bt),
             "feature_importance": feature_importance(final, cols),
