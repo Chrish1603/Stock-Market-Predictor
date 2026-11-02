@@ -12,7 +12,7 @@ prices, trains models, and writes predictions. A Streamlit dashboard shows the r
 |---|---|---|
 | Ingest | `smp.ingest` | Daily adjusted OHLCV from Yahoo Finance in `data/raw/`. Re-runs only fetch new days, and refetch full history if past prices were re-adjusted (splits/dividends). |
 | Clean | `smp.clean` | Sorted, de-duplicated, validated prices in `data/processed/clean/`, plus `quality_report.json` (filled values, dropped rows, fixed OHLC bars, flagged extreme moves, gaps). |
-| Features | `smp.features` | 31 features per day (returns, moving-average ratios, MACD, RSI, stochastic, volatility, ATR, Bollinger %B, volume, SPY and VIX context, calendar) and targets for each horizon (1, 5, 20 days): log return and up/down direction. |
+| Features | `smp.features` | Up to 46 features per day: price (returns, moving-average ratios, MACD, RSI, stochastic, volatility, ATR, Bollinger %B, volume), market (S&P 500, VIX, changes in 10-year and 3-month Treasury yields and the yield curve), sector (fund returns and the stock's strength relative to it), earnings (days to next / since last report, last EPS surprise) and calendar and targets for each horizon (1, 5, 20 days): log return and up/down direction. |
 | Train | `smp.train` | For each ticker, horizon and target: baseline, linear model, LightGBM and XGBoost compared with walk-forward cross-validation. The best non-baseline model is evaluated on the last 12 months (hold-out) and backtested, then refit on all data. Saved to `models/<TICKER>/h<N>/`. |
 | Predict | `smp.predict` | `models/predictions.parquet`: P(up) and predicted return for each horizon. |
 | Track record | `smp.history` | Every prediction is appended to `data/history/predictions.parquet` and scored once its target day has closed. Only the first prediction per ticker and day is kept, so the record can't be rewritten. |
@@ -24,6 +24,9 @@ prices, trains models, and writes predictions. A Streamlit dashboard shows the r
 - Longer-horizon backtests hold each position for the full horizon instead of trading daily.
 - Every model is compared with a naive baseline (most-common class / zero return).
 - The backtest charges 0.1% per position change and is compared with buy-and-hold.
+- Interest rates enter as changes, not levels: levels drift for years and let trees memorise eras.
+- Earnings dates are only treated as known up to 20 business days ahead, and an EPS surprise only from its
+  reaction day (same day for pre-noon reports, else the next trading day).
 - Today's price bar is ignored until 16:30 New York time, so features and scoring only use final closing prices.
 - Live predictions are scored on outcomes that didn't exist when they were made (`smp track-record`).
 
@@ -49,7 +52,7 @@ smp track-record               # how past live predictions turned out
 streamlit run app/dashboard.py # open the dashboard
 ```
 
-Settings (tickers, horizons, dates, hold-out length, costs, paths) live in [config/config.yaml](config/config.yaml).
+Settings (tickers, horizons, sector funds, earnings on/off, dates, hold-out length, costs, paths) live in [config/config.yaml](config/config.yaml).
 Logs are written to `logs/pipeline.log`.
 
 ### Dashboard

@@ -13,6 +13,7 @@ import pandas as pd
 
 from smp.clean import clean_path
 from smp.config import Config, ticker_to_filename
+from smp.ingest import earnings_path
 
 log = logging.getLogger(__name__)
 
@@ -66,8 +67,46 @@ def atr(df: pd.DataFrame, n: int = 14) -> pd.Series:
 # --- feature construction ---------------------------------------------------------------------
 
 
+RATE_TICKERS = {"tnx", "irx"}  # Treasury yields, quoted in percent
+MAX_DAYS_TO_EARNINGS = 20  # dates are usually announced 2-4 weeks ahead; don't assume more
+MAX_DAYS_SINCE_EARNINGS = 90
+
+
+def earnings_features(index: pd.DatetimeIndex, earnings: pd.DataFrame) -> pd.DataFrame:
+    """Business days to the next / since the last earnings reaction day, and the last EPS surprise.
+
+    The surprise only becomes known on its reaction day, so day t sees reports with reaction_date <= t.
+    """
+    e = earnings.dropna(subset=["reaction_date"]).sort_values("reaction_date")
+    rd = pd.DatetimeIndex(e["reaction_date"]).values.astype("datetime64[D]")
+    surprise = e["surprise_pct"].ffill().fillna(0.0).to_numpy()
+    days = index.values.astype("datetime64[D]")
+    pos = np.searchsorted(rd, days, side="right")  # reaction days <= t
+
+    has_next, has_prev = pos < len(rd), pos > 0
+    to_next = np.full(len(days), MAX_DAYS_TO_EARNINGS, dtype=float)
+    to_next[has_next] = np.busday_count(days[has_next], rd[pos[has_next]])
+    since = np.full(len(days), MAX_DAYS_SINCE_EARNINGS, dtype=float)
+    since[has_prev] = np.busday_count(rd[pos[has_prev] - 1], days[has_prev])
+    last_surprise = np.zeros(len(days))
+    last_surprise[has_prev] = surprise[pos[has_prev] - 1]
+
+    return pd.DataFrame(
+        {
+            "days_to_earnings": np.clip(to_next, 0, MAX_DAYS_TO_EARNINGS),
+            "days_since_earnings": np.clip(since, 0, MAX_DAYS_SINCE_EARNINGS),
+            "last_eps_surprise": np.clip(last_surprise, -100, 100),
+        },
+        index=index,
+    )
+
+
 def build_features(
-    df: pd.DataFrame, market: dict[str, pd.DataFrame] | None = None, horizons: list[int] | tuple[int, ...] = (1,)
+    df: pd.DataFrame,
+    market: dict[str, pd.DataFrame] | None = None,
+    horizons: list[int] | tuple[int, ...] = (1,),
+    sector: pd.DataFrame | None = None,
+    earnings: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Return a frame of features plus targets for each horizon, indexed like `df`.
 
@@ -116,15 +155,38 @@ def build_features(
     out["month"] = df.index.month
 
     # Market context (aligned to this ticker's dates using only past values)
+    rates: dict[str, pd.Series] = {}
     for name, mdf in (market or {}).items():
         mc = mdf["Close"].reindex(df.index, method="ffill")
         key = ticker_to_filename(name).lower()
         if key == "vix":
             out["vix_level"] = mc
             out["vix_change_5"] = np.log(mc / mc.shift(5))
+        elif key in RATE_TICKERS:
+            # Changes only: rate levels drift for years, so trees would use them to recognise eras.
+            rates[key] = mc
+            out[f"{key}_change_5"] = mc - mc.shift(5)  # percentage points
+            out[f"{key}_change_20"] = mc - mc.shift(20)
         else:
             out[f"{key}_ret_1"] = np.log(mc / mc.shift(1))
             out[f"{key}_ret_5"] = np.log(mc / mc.shift(5))
+    if RATE_TICKERS <= set(rates):
+        curve = rates["tnx"] - rates["irx"]  # 10-year minus 3-month
+        out["yield_curve_change_20"] = curve - curve.shift(20)
+        out["yield_curve_inverted"] = (curve < 0).astype(float).where(curve.notna())
+
+    # Sector: how the stock's sector fund is doing, and the stock relative to it
+    if sector is not None:
+        sc = sector["Close"].reindex(df.index, method="ffill")
+        out["sector_ret_5"] = np.log(sc / sc.shift(5))
+        out["sector_ret_20"] = np.log(sc / sc.shift(20))
+        out["sector_sma_ratio_50"] = sc / sc.rolling(50).mean() - 1
+        out["rel_strength_20"] = out["ret_20"] - out["sector_ret_20"]
+        out["rel_strength_60"] = np.log(c / c.shift(60)) - np.log(sc / sc.shift(60))
+
+    # Earnings calendar
+    if earnings is not None and not earnings.empty:
+        out = out.join(earnings_features(df.index, earnings))
 
     out = out.replace([np.inf, -np.inf], np.nan)
 
@@ -161,7 +223,12 @@ def build_all(cfg: Config) -> dict[str, int]:
         if not p.exists():
             log.warning("%s: no clean data, skipping features", ticker)
             continue
-        feats = build_features(pd.read_parquet(p), market, cfg.train.horizons)
+        sector = None
+        if (fund := cfg.data.sectors.get(ticker)) and (sp := clean_path(cfg, fund)).exists():
+            sector = pd.read_parquet(sp)
+        ep = earnings_path(cfg, ticker)
+        earnings = pd.read_parquet(ep) if cfg.data.earnings and ep.exists() else None
+        feats = build_features(pd.read_parquet(p), market, cfg.train.horizons, sector, earnings)
         feats.to_parquet(features_path(cfg, ticker))
         counts[ticker] = len(feats)
         log.info("%s: %d feature rows, %d features", ticker, len(feats), len(feature_columns(feats)))

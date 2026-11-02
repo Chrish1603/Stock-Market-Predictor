@@ -100,6 +100,57 @@ def ingest_ticker(cfg: Config, ticker: str) -> int:
     return len(data)
 
 
+def download_earnings(ticker: str, limit: int = 100) -> pd.DataFrame:
+    """Past and scheduled earnings dates with EPS surprise.
+
+    `reaction_date` is the first trading day whose close reflects the report: the same day for
+    reports before noon, otherwise the next business day (most reports come after the close).
+    """
+    cols = ["earnings_date", "reaction_date", "surprise_pct"]
+    raw = yf.Ticker(ticker).get_earnings_dates(limit=limit)
+    if raw is None or raw.empty:
+        return pd.DataFrame(columns=cols)
+    stamps = pd.DatetimeIndex(raw.index)
+    if stamps.tz is not None:
+        stamps = stamps.tz_convert(MARKET_TZ).tz_localize(None)
+    day = stamps.normalize()
+    reaction = day.where(stamps.hour < 12, day + pd.offsets.BDay(1))
+    out = pd.DataFrame(
+        {
+            "earnings_date": day,
+            "reaction_date": reaction,
+            "surprise_pct": pd.to_numeric(raw.get("Surprise(%)"), errors="coerce").to_numpy(),
+        }
+    )
+    return out.drop_duplicates("reaction_date", keep="first").sort_values("reaction_date").reset_index(drop=True)
+
+
+def earnings_path(cfg: Config, ticker: str) -> Path:
+    return cfg.paths.raw / "earnings" / f"{ticker_to_filename(ticker)}.parquet"
+
+
+def ingest_earnings(cfg: Config, ticker: str) -> int:
+    """Refresh earnings dates (cheap: one request). Keeps the old file if the download fails."""
+    yf_log = logging.getLogger("yfinance")
+    level = yf_log.level
+    yf_log.setLevel(logging.CRITICAL)  # yfinance logs an error for funds, which have no earnings
+    try:
+        e = download_earnings(ticker)
+    except Exception as exc:
+        log.info("%s: no earnings dates (%s)", ticker, exc)
+        return 0
+    finally:
+        yf_log.setLevel(level)
+    if e.empty:
+        log.info("%s: no earnings dates (likely an ETF)", ticker)
+        return 0
+    path = earnings_path(cfg, ticker)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    e.to_parquet(path, index=False)
+    log.info("%s: %d earnings dates through %s", ticker, len(e), e["earnings_date"].max().date())
+    return len(e)
+
+
 def ingest_all(cfg: Config) -> dict[str, int]:
     """Ingest every configured ticker; one failure doesn't stop the others."""
     results: dict[str, int] = {}
@@ -109,4 +160,7 @@ def ingest_all(cfg: Config) -> dict[str, int]:
         except Exception as exc:
             log.error("%s: ingest failed: %s", ticker, exc)
             results[ticker] = -1
+    if cfg.data.earnings:
+        for ticker in cfg.data.tickers:
+            ingest_earnings(cfg, ticker)
     return results

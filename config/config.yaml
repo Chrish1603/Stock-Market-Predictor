@@ -2,7 +2,12 @@
 
 data:
   tickers: [AAPL, MSFT, NVDA, SPY]   # stocks to model
-  market_tickers: [SPY, ^VIX]        # used as market-context features
+  market_tickers: [SPY, ^VIX, ^TNX, ^IRX]  # market context: S&P 500, volatility, 10-year and 3-month yields
+  sectors:                           # sector fund per stock (relative-strength features)
+    AAPL: XLK
+    MSFT: XLK
+    NVDA: SMH
+  earnings: true                     # earnings-date features for stocks (skipped for ETFs)
   start: "2010-01-01"
   end: null                          # null = up to today
   ffill_limit: 2                     # max consecutive missing values to forward-fill

@@ -61,3 +61,25 @@ def test_clean_requires_columns(ohlcv):
 
     with pytest.raises(ValueError):
         clean_ohlcv(ohlcv.drop(columns=["Volume"]))
+
+
+def test_download_earnings_reaction_dates(monkeypatch):
+    import smp.ingest as ingest
+
+    stamps = pd.DatetimeIndex(
+        ["2024-01-25 16:00", "2024-04-25 07:30", "2024-07-26 16:00"],
+        tz="America/New_York",  # Fri after close
+    )
+    raw = pd.DataFrame({"Surprise(%)": [3.0, -1.0, np.nan]}, index=stamps)
+
+    class FakeTicker:
+        def __init__(self, t):
+            pass
+
+        def get_earnings_dates(self, limit):
+            return raw
+
+    monkeypatch.setattr(ingest.yf, "Ticker", FakeTicker)
+    e = ingest.download_earnings("AAA")
+    assert list(e["reaction_date"].dt.strftime("%Y-%m-%d")) == ["2024-01-26", "2024-04-25", "2024-07-29"]
+    assert e["surprise_pct"].iloc[0] == 3.0

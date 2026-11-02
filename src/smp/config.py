@@ -13,7 +13,9 @@ DEFAULT_CONFIG = PROJECT_ROOT / "config" / "config.yaml"
 
 class DataConfig(BaseModel):
     tickers: list[str] = Field(default_factory=lambda: ["AAPL", "MSFT", "NVDA", "SPY"])
-    market_tickers: list[str] = Field(default_factory=lambda: ["SPY", "^VIX"])
+    market_tickers: list[str] = Field(default_factory=lambda: ["SPY", "^VIX", "^TNX", "^IRX"])
+    sectors: dict[str, str] = Field(default_factory=dict)  # ticker -> sector fund, e.g. AAPL: XLK
+    earnings: bool = True  # download earnings dates for modelled tickers (ETFs have none)
     start: str = "2010-01-01"
     end: str | None = None
     ffill_limit: int = 2
@@ -21,8 +23,8 @@ class DataConfig(BaseModel):
 
     @property
     def all_tickers(self) -> list[str]:
-        """Modelled tickers plus market-context tickers, without duplicates."""
-        return list(dict.fromkeys(self.tickers + self.market_tickers))
+        """Modelled, market-context and sector tickers, without duplicates."""
+        return list(dict.fromkeys(self.tickers + self.market_tickers + list(self.sectors.values())))
 
 
 class TrainConfig(BaseModel):

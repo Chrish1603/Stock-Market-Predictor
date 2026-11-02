@@ -59,3 +59,43 @@ def test_features_include_market_context(ohlcv):
     for col in ("spy_ret_1", "vix_level", "vix_change_5", "rsi_14", "sma_ratio_200"):
         assert col in f.columns
     assert not np.isinf(f[feature_columns(f)].to_numpy(dtype=float)).any()
+
+
+def test_sector_rates_and_lookahead(ohlcv):
+    """New inputs must also only use the past."""
+    market = {"SPY": make_ohlcv(seed=1), "^TNX": make_ohlcv(seed=4, base=4), "^IRX": make_ohlcv(seed=5, base=3)}
+    sector = make_ohlcv(seed=6)
+    base = build_features(ohlcv, market, sector=sector)
+    for col in ("tnx_change_20", "yield_curve_change_20", "sector_ret_20", "rel_strength_20", "rel_strength_60"):
+        assert col in base.columns
+
+    t = 400
+    tampered_sector = sector.copy()
+    tampered_sector.iloc[t + 1 :] *= 2.0
+    tampered_market = {k: v.copy() for k, v in market.items()}
+    for v in tampered_market.values():
+        v.iloc[t + 1 :] *= 0.5
+    after = build_features(ohlcv, tampered_market, sector=tampered_sector)
+    cols = feature_columns(base)
+    pd.testing.assert_frame_equal(base[cols].iloc[: t + 1], after[cols].iloc[: t + 1])
+
+
+def test_earnings_features():
+    from smp.features import MAX_DAYS_SINCE_EARNINGS, MAX_DAYS_TO_EARNINGS, earnings_features
+
+    idx = pd.bdate_range("2024-01-01", "2024-03-29")
+    earnings = pd.DataFrame(
+        {
+            "reaction_date": pd.to_datetime(["2024-01-26", "2024-03-01"]),
+            "surprise_pct": [5.0, np.nan],  # second report not out yet in this data
+        }
+    )
+    f = earnings_features(idx, earnings)
+    assert f.loc["2024-01-25", "days_to_earnings"] == 1
+    assert f.loc["2024-01-25", "last_eps_surprise"] == 0  # surprise unknown before reaction day
+    assert f.loc["2024-01-26", "last_eps_surprise"] == 5.0
+    assert f.loc["2024-01-26", "days_since_earnings"] == 0
+    assert f.loc["2024-01-01", "days_to_earnings"] == 19
+    assert f["days_to_earnings"].max() <= MAX_DAYS_TO_EARNINGS
+    assert f.loc["2024-03-29", "days_to_earnings"] == MAX_DAYS_TO_EARNINGS  # nothing scheduled
+    assert f.loc["2024-01-02", "days_since_earnings"] == MAX_DAYS_SINCE_EARNINGS
