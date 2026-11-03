@@ -28,7 +28,7 @@ All out of sample, with confidence intervals ([full results](docs/RESULTS.md)).
 
 | Question | Finding |
 |---|---|
-| Can up/down direction be predicted? | **Barely.** Best ROC-AUC 0.52 vs 0.50 for a coin flip: statistically detectable, practically useless. |
+| Can up/down direction be predicted? | **Barely.** Best ROC-AUC 0.52 vs 0.50 for a coin flip: statistically detectable, too small to act on. |
 | Can volatility be predicted? | **Yes.** Beats "same as last month" by +0.31 R² and the standard HAR model by +0.05 (p < 0.001), and held up on S&P 500 data back to 1997. |
 | Does volatility targeting help an investor? | **It cuts drawdowns, not risk-adjusted return.** Worst drawdown −37.5% → −17.8% (2013–2026); 2008 −55% → −34%. Sharpe not significantly better (p = 0.38). |
 | Is a better forecast a better decision? | **Not here.** Sizing on last month's volatility did as well as sizing on the model's forecast. |
@@ -50,8 +50,8 @@ All out of sample, with confidence intervals ([full results](docs/RESULTS.md)).
 - **Communication.** A Streamlit dashboard that explains risk in plain words and dollars (expected price
   ranges), shows calibration so viewers can judge the forecasts, and states its limits. Daily summaries go to
   phone and desktop.
-- **Software quality.** A typed, validated config, a CLI, about 100 tests (pipeline, leakage, statistics,
-  dashboard), linting and CI on every push.
+- **Software quality.** A typed, validated config, a CLI, a dashboard split into one module per tab, over 100
+  tests (pipeline, leakage, statistics, dashboard) and linting and CI on every push.
 
 ## Tech stack
 
@@ -74,8 +74,8 @@ flowchart LR
   P --> S[Snapshot] --> W[Live dashboard]
 ```
 
-One Python package with a module per stage and a CLI (`smp`), driven by a single config file. The same
-pipeline runs in GitHub Actions and on a local schedule.
+A Python package (`smp`) with a module per pipeline stage and a CLI, plus a Streamlit app with a module per
+tab, all driven by a single config file. The same pipeline runs in GitHub Actions and on a local schedule.
 
 ## Challenges and what I learned
 
@@ -231,7 +231,8 @@ variants:
 config/config.yaml        settings
 src/smp/                  pipeline package: ingest, clean, features, train, risk, allocation, regime,
                           predict, history, sync, notify, publish, experiment, stats, insights, cli
-app/dashboard.py          Streamlit dashboard
+app/dashboard.py          Streamlit entry point: data source, sidebar, tabs
+app/smp_dashboard/        theme, chart style, data loaders, and one module per tab
 experiments/              experiment specs and reports
 docs/                     results page and images
 scripts/                  launchd job
