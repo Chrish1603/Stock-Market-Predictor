@@ -30,6 +30,9 @@ def test_dashboard_renders():
             assert not at.exception, (h, task, at.exception)
         _control(at, "track_h").set_value(h).run()
         assert not at.exception, (h, at.exception)
+    for h in cfg.risk.horizons:
+        _control(at, "track_risk_h").set_value(h).run()
+        assert not at.exception, (h, at.exception)
     for r in ("3M", "All"):
         _control(at, "price_range").set_value(r).run()
         assert not at.exception, (r, at.exception)

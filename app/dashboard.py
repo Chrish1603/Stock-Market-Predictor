@@ -31,6 +31,7 @@ from smp.history import load_history, summarize  # noqa: E402
 from smp.predict import predictions_path  # noqa: E402
 from smp.regime import market_dir  # noqa: E402
 from smp.risk import risk_dir, risk_predictions_path  # noqa: E402
+from smp.risk_history import load_risk_history, summarize_risk  # noqa: E402
 from smp.train import model_dir  # noqa: E402
 
 st.set_page_config(page_title="Stock Market Predictor", layout="wide")
@@ -298,6 +299,11 @@ def load_track_record() -> pd.DataFrame:
 
 
 @st.cache_data
+def load_risk_track_record() -> pd.DataFrame:
+    return load_risk_history(CFG)
+
+
+@st.cache_data
 def load_json(path: str) -> dict | None:
     p = Path(path)
     return json.loads(p.read_text()) if p.exists() else None
@@ -549,7 +555,9 @@ with tab_today:
                     + stat_html(
                         f"Chance of a {rc.drop_threshold:.0%} drop",
                         f"{r.p_drop:.0%}",
-                        f"usually {normal_drop:.0%}",
+                        "the usual rate (no model beat it)"
+                        if getattr(r, "drop_model", None) == "baseline"
+                        else f"usually {normal_drop:.0%}",
                         r.p_drop,
                     )
                     + stat_html(
@@ -745,12 +753,140 @@ with tab_risk:
 # --- live track record -------------------------------------------------------------------------
 
 with tab_track:
-    hist = load_track_record()
     st.subheader("Live track record")
     st.caption(
-        "Every prediction is saved when it's made and scored after the next close. Unlike the hold-out test, "
-        "these were made before the outcome existed. Compare the hit rate with always guessing 'up'."
+        "Every forecast is saved when it's made and scored once its horizon has passed. Unlike the backtests, "
+        "these were made before the outcome existed, so they can't have been tuned to it."
     )
+
+    st.markdown("#### Risk forecasts")
+    st.caption(
+        "Volatility forecasts are compared with what volatility turned out to be, and with simply quoting last "
+        "month's volatility. Drop chances are compared with what happened, and with quoting the historical "
+        "drop rate. Lower errors and Brier scores are better."
+    )
+    rhist = load_risk_track_record()
+    risk_track_h = (
+        st.segmented_control(
+            "Risk horizon",
+            CFG.risk.horizons,
+            default=CFG.risk.horizons[0],
+            format_func=horizon_label,
+            key="track_risk_h",
+        )
+        or CFG.risk.horizons[0]
+    )
+    if rhist.empty:
+        st.info("No risk forecasts recorded yet. Run `smp predict` (or `smp run-all`).")
+    else:
+        rsum = summarize_risk(rhist)
+        rsum = rsum[rsum["horizon"] == risk_track_h].set_index("ticker")
+        rsum = rsum.assign(first=rsum["first"].dt.date, last=rsum["last"].dt.date)
+        rsum = rsum[
+            [
+                "predictions",
+                "scored",
+                "vol_error",
+                "trailing_vol_error",
+                "closer_share",
+                "drops",
+                "brier",
+                "base_rate_brier",
+                "first",
+                "last",
+            ]
+        ]
+        rsum.columns = [
+            "Forecasts",
+            "Scored",
+            "Vol off by",
+            "Last month's vol off by",
+            "Forecast closer",
+            "Drops seen",
+            "Drop Brier",
+            "Historical-rate Brier",
+            "First",
+            "Latest",
+        ]
+        rsum.index.name = "Stock"
+        st.dataframe(
+            as_text(
+                rsum,
+                {
+                    "Vol off by": "{:.0%}",
+                    "Last month's vol off by": "{:.0%}",
+                    "Forecast closer": "{:.0%}",
+                    "Drop Brier": "{:.3f}",
+                    "Historical-rate Brier": "{:.3f}",
+                },
+            ),
+            width="stretch",
+        )
+        rt = rhist[(rhist["ticker"] == ticker) & (rhist["horizon"] == risk_track_h)].sort_values("as_of")
+        rscored = rt.dropna(subset=["realised_vol"])
+        if len(rscored) < 2:
+            pending = rt[rt["realised_vol"].isna()]
+            first_due = (
+                f" The first is scored after the close on about "
+                f"{(pending['as_of'].min() + pd.offsets.BDay(risk_track_h)):%a %d %b}."
+                if len(pending) and rscored.empty
+                else ""
+            )
+            st.info(
+                f"{ticker}: {len(rt)} {horizon_label(risk_track_h)} forecast{'s' if len(rt) != 1 else ''} recorded, "
+                f"{len(rscored)} scored so far.{first_due} The chart appears once a few have been scored."
+            )
+        else:
+            fig = go.Figure()
+            for col, name, color, dash in (
+                ("realised_vol", "What happened", C["s1"], None),
+                ("forecast_vol", "Forecast", C["s2"], None),
+                ("trailing_vol", "Last month's vol", C["muted"], "dot"),
+            ):
+                fig.add_trace(
+                    go.Scatter(
+                        x=rscored["as_of"], y=rscored[col], name=name, line=dict(color=color, width=2, dash=dash)
+                    )
+                )
+            fig.update_layout(title=f"{ticker} volatility over the next {horizon_label(risk_track_h)}, by forecast day")
+            fig.update_yaxes(tickformat=".0%")
+            show(style(fig, height=360))
+        if not rt.empty:
+            recent = rt.sort_values("as_of", ascending=False).assign(
+                as_of=lambda d: d["as_of"].dt.date,
+                target_date=lambda d: pd.to_datetime(d["target_date"]).dt.date,
+                dropped=lambda d: d["dropped"].map({1.0: "yes", 0.0: "no"}).fillna("pending"),
+            )
+            recent = recent[
+                ["as_of", "forecast_vol", "trailing_vol", "realised_vol", "p_drop", "dropped", "target_date"]
+            ]
+            recent.columns = [
+                "Made on",
+                "Forecast vol",
+                "Last month's vol",
+                "What happened",
+                "Drop chance",
+                "Dropped?",
+                "Scored on",
+            ]
+            st.markdown(f"**{ticker}: every {risk_track_h}-day risk forecast**")
+            st.dataframe(
+                as_text(
+                    recent,
+                    {
+                        "Forecast vol": "{:.0%}",
+                        "Last month's vol": "{:.0%}",
+                        "What happened": "{:.0%}",
+                        "Drop chance": "{:.0%}",
+                    },
+                ),
+                hide_index=True,
+                width="stretch",
+            )
+
+    st.markdown("#### Direction calls")
+    st.caption("Up/down calls, scored after each horizon's close. Compare the hit rate with always guessing 'up'.")
+    hist = load_track_record()
     track_h = (
         st.segmented_control(
             "Horizon", CFG.train.horizons, default=CFG.train.horizons[0], format_func=horizon_label, key="track_h"
@@ -813,7 +949,7 @@ with tab_track:
             )
             recent = recent[["as_of", "direction", "p_up", "target_date", "actual_return", "result"]]
             recent.columns = ["Made on", "Call", "Chance of up", "Scored on", "What happened", "Result"]
-            st.markdown(f"**{ticker}: every {horizon_label(track_h).replace(' ', '-')} prediction**")
+            st.markdown(f"**{ticker}: every {track_h}-day prediction**")
             st.dataframe(
                 as_text(recent, {"Chance of up": "{:.0%}", "What happened": "{:+.2%}"}),
                 hide_index=True,

@@ -88,7 +88,7 @@ Other commands:
 ```bash
 smp run-all --skip-train         # refresh data and forecasts with the existing models
 smp ingest | clean | features | train | predict | notify    # one stage
-smp track-record                 # how past live predictions turned out
+smp track-record                 # how past live risk forecasts and direction calls turned out
 smp experiment run experiments/risk_vol_models.yaml         # compare config variants
 smp publish --out site-data      # build the dashboard snapshot
 ```
@@ -104,7 +104,7 @@ optional inputs, risk targets, costs, notifications and the snapshot URL. Logs g
 | **Risk & allocation** | Risk forecasts for 5 and 20 days, forecast vs realised volatility, the 2013–2026 allocation backtest and the regime history |
 | **Price & indicators** | Candlesticks with moving averages and Bollinger band, volume, RSI, MACD |
 | **Direction models** | Up/down and return models per horizon: metrics vs baseline, ROC curve, what each model relies on, hold-out backtest |
-| **Track record** | Every live prediction and how it turned out, vs always guessing "up" |
+| **Track record** | Every live forecast and how it turned out: volatility vs last month's figure, drop chances vs the historical rate, direction calls vs always guessing "up" |
 | **Data quality** | What the cleaning step fixed or flagged |
 
 | Volatility forecast vs what happened | Volatility targeting vs buy-and-hold |
@@ -224,7 +224,8 @@ smp experiment index    # rebuild docs/RESULTS.md from the reports
   re-adjust history.
 - Earnings dates are only treated as known up to 20 business days ahead, and an earnings surprise only from the
   first trading day that reflects it.
-- Live predictions are recorded before the outcome exists, and only the first prediction per day is kept.
+- Live forecasts (risk and direction) are recorded before the outcome exists, only the first per day is kept,
+  and they're scored with the same definitions as the training targets.
 
 ## Pipeline reference
 
@@ -237,7 +238,7 @@ smp experiment index    # rebuild docs/RESULTS.md from the reports
 | Risk | `smp.risk` | Volatility (vs persistence and HAR) and calibrated 5%-drop models, with out-of-fold predictions |
 | Allocation | `smp.allocation` | Volatility-targeted sizing and its out-of-sample backtest |
 | Regime | `smp.regime` | Calm / normal / stressed label from forecast volatility, breadth and trend |
-| Predict | `smp.predict`, `smp.history` | Latest forecasts and the append-only, auto-scored track record |
+| Predict | `smp.predict`, `smp.history`, `smp.risk_history` | Latest forecasts and the append-only, auto-scored track records |
 | Notify | `smp.notify` | Daily summary to file, GitHub, Mac and phone |
 | Publish | `smp.publish` | Dashboard snapshot |
 | Experiments | `smp.experiment`, `smp.stats` | Variant comparisons with cluster-bootstrap intervals and Holm correction |
