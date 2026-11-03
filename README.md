@@ -113,17 +113,27 @@ optional inputs, risk targets, costs, notifications and the snapshot URL. Logs g
 
 ## Running it automatically
 
-**Locally (macOS):** [scripts/com.smp.pipeline.plist](scripts/com.smp.pipeline.plist) runs `smp run-all` at
-11:00 Tue–Sat New Zealand time, just after the US close. Adjust the times for your time zone, then:
+**Locally (macOS):** [scripts/install_schedule.sh](scripts/install_schedule.sh) installs a launchd job that runs
+`smp run-all` at 11:00 Tue–Sat local time (just after the US close from New Zealand). Set `HOUR`, `MINUTE` and
+`DAYS` for your time zone. If a run fails, you get a desktop notification. Logs go to `~/Library/Logs/smp/`.
 
 ```bash
-cp scripts/com.smp.pipeline.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.smp.pipeline.plist
+scripts/install_schedule.sh
+launchctl kickstart gui/$(id -u)/com.smp.pipeline     # run it once now to check
 ```
 
+macOS blocks background jobs from reading `~/Documents`, `~/Desktop` and `~/Downloads`. If the project lives
+there, either move it (e.g. to `~/Projects`) and rerun the installer, or give `/bin/bash` Full Disk Access in
+*System Settings → Privacy & Security*.
+
 **GitHub Actions:** [.github/workflows/pipeline.yml](.github/workflows/pipeline.yml) lints and tests every push.
-On weekdays at 22:30 UTC (or via *Run workflow*) it runs the pipeline and publishes the dashboard snapshot. The
-summary appears on the run page.
+After each US close (or via *Run workflow*) it runs the pipeline and publishes the dashboard snapshot. GitHub's
+scheduler can drop runs, so there are three slots (22:30, 01:30 and 04:30 UTC); later ones exit early once the day
+is published. A run fails, and GitHub emails you, if data is still out of date afterwards. The summary appears on
+the run page.
+
+**Health check:** `smp health` lists stale or missing data and exits with an error if there is any. The daily
+summary and the dashboard also warn when data is out of date.
 
 **Hosted dashboard (Streamlit Community Cloud):** sign in at [share.streamlit.io](https://share.streamlit.io)
 with GitHub, choose *Create app*, pick this repo, branch `main`, file `app/dashboard.py`, Python 3.10, and deploy.

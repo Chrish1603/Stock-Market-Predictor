@@ -94,10 +94,13 @@ def changes(now: dict, before: dict | None) -> list[str]:
     return out
 
 
-def render(now: dict, diff: list[str]) -> tuple[str, str, str]:
-    """(title, plain text for notifications, markdown for logs and GitHub)."""
+def render(now: dict, diff: list[str], problems: list[str] | None = None) -> tuple[str, str, str]:
+    """(title, plain text for notifications, markdown for logs and GitHub). Problems always lead."""
+    problems = problems or []
     regime = (now["regime"] or "unknown").capitalize()
     title = diff[0] if diff and diff[0].startswith("Market regime") else f"{regime} market · {now['as_of']}"
+    if problems:
+        title = f"⚠ {len(problems)} problem{'s' if len(problems) != 1 else ''}: {problems[0]}"
     lines = []
     for s in now["stocks"]:
         bits = [
@@ -108,8 +111,12 @@ def render(now: dict, diff: list[str]) -> tuple[str, str, str]:
         if s["earnings_in"] is not None:
             bits.append(f"earnings in {s['earnings_in']}d")
         lines.append(f"{s['ticker']}: " + ", ".join(bits))
-    text = "\n".join(([" · ".join(diff), ""] if diff else []) + lines)
+    text = "\n".join(
+        ([" · ".join(problems), ""] if problems else []) + ([" · ".join(diff), ""] if diff else []) + lines
+    )
     md = [f"### {title}", ""]
+    if problems:
+        md += ["**Problems:**", *[f"- ⚠ {x}" for x in problems], ""]
     if now["market_vol"] is not None:
         md.append(
             f"S&P 500 20-day volatility forecast: **{now['market_vol']:.0%}**. Based on the close of {now['as_of']}."
@@ -150,17 +157,43 @@ def send_ntfy(server: str, topic: str, title: str, text: str) -> bool:
         return False
 
 
+def run_problems(cfg: Config) -> list[str]:
+    """Stage failures from the last pipeline run plus stale or missing data."""
+    from smp.health import data_problems
+
+    problems = []
+    status = cfg.paths.logs / "last_run.json"
+    if status.exists():
+        try:
+            run = json.loads(status.read_text())
+            problems += [f"stage '{f['stage']}' failed: {f['error']}" for f in run.get("failures", [])]
+        except (json.JSONDecodeError, KeyError, TypeError):
+            problems.append("last run status file is unreadable")
+    try:
+        problems += data_problems(cfg)
+    except Exception as exc:  # a broken check must not stop the alert
+        problems.append(f"data check failed: {exc}")
+    return problems
+
+
 def notify(cfg: Config) -> dict:
-    """Build the summary, compare with the last run, write it out and send it."""
+    """Build the summary, compare with the last run, write it out and send it. Problems are always sent."""
+    problems = run_problems(cfg)
     try:
         now = build_summary(cfg)
     except FileNotFoundError as exc:
-        log.warning("no summary: %s", exc)
-        return {}
+        if not problems:
+            log.warning("no summary: %s", exc)
+            return {}
+        now = {"as_of": None, "regime": None, "market_vol": None, "stocks": []}
+        problems.append(str(exc))
     state = cfg.paths.history / STATE_FILE
-    before = json.loads(state.read_text()) if state.exists() else None
+    try:
+        before = json.loads(state.read_text()) if state.exists() else None
+    except json.JSONDecodeError:
+        before = None
     diff = changes(now, before)
-    title, text, md = render(now, diff)
+    title, text, md = render(now, diff, problems)
 
     cfg.paths.logs.mkdir(parents=True, exist_ok=True)
     (cfg.paths.logs / "summary.md").write_text(md + "\n")
@@ -173,7 +206,8 @@ def notify(cfg: Config) -> dict:
     topic = os.environ.get("SMP_NTFY_TOPIC") or cfg.notify.ntfy_topic
     if topic and send_ntfy(cfg.notify.ntfy_server, topic, title, text):
         sent.append("ntfy")
-    cfg.paths.history.mkdir(parents=True, exist_ok=True)
-    state.write_text(json.dumps(now, indent=2))
+    if now["stocks"]:  # keep the last good state for change tracking
+        cfg.paths.history.mkdir(parents=True, exist_ok=True)
+        state.write_text(json.dumps(now, indent=2))
     log.info("summary: %s%s", title, f" (sent via {', '.join(sent)})" if sent else "")
-    return {"title": title, "text": text, "changes": diff, "sent": sent}
+    return {"title": title, "text": text, "changes": diff, "problems": problems, "sent": sent}

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from datetime import date
 from pathlib import Path
 
 import typer
@@ -72,6 +74,27 @@ def run_all(
 ):
     """Run the full pipeline: ingest -> clean -> features -> train -> predict."""
     pipeline.run_all(_cfg(config, tune), skip_ingest=skip_ingest, skip_train=skip_train)
+
+
+@app.command()
+def health(
+    config: Path | None = ConfigOpt,
+    snapshot: Path | None = typer.Option(None, help="Check a published snapshot's manifest.json instead."),
+):
+    """Check that data is current. Exits 1 if anything is stale or missing (for scripts and CI)."""
+    from smp.health import data_problems, expected_latest_close, is_stale
+
+    if snapshot is not None:
+        as_of = json.loads(snapshot.read_text()).get("as_of") if snapshot.exists() else None
+        current = as_of is not None and not is_stale(date.fromisoformat(as_of))
+        typer.echo(f"snapshot as of {as_of}; expected {expected_latest_close()}: {'current' if current else 'stale'}")
+        raise typer.Exit(0 if current else 1)
+    problems = data_problems(load_config(config))
+    for p in problems:
+        typer.echo(f"problem: {p}")
+    if not problems:
+        typer.echo(f"ok: data is current (latest expected close {expected_latest_close()})")
+    raise typer.Exit(1 if problems else 0)
 
 
 @app.command("notify")

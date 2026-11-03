@@ -337,6 +337,19 @@ if prices is None:
     st.warning("No data yet. Run `smp run-all` first.")
     st.stop()
 
+# Warn visitors when the daily update has stopped
+_rp = load_parquet(str(risk_predictions_path(CFG)))
+if _rp is not None and len(_rp):
+    from smp.health import business_days_behind, is_stale
+
+    _as_of = pd.to_datetime(_rp["as_of"]).max().date()
+    if is_stale(_as_of):
+        _n = business_days_behind(_as_of)
+        st.warning(
+            f"⚠ Data is {_n} trading day{'s' if _n != 1 else ''} out of date (last close {_as_of:%a %d %b}). "
+            "The daily update may have failed; forecasts below are from that close.",
+        )
+
 tab_today, tab_risk, tab_price, tab_dir, tab_track, tab_quality = st.tabs(
     ["Today", "Risk & allocation", "Price & indicators", "Direction models", "Track record", "Data quality"]
 )

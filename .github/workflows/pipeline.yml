@@ -5,7 +5,11 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    - cron: "30 22 * * 1-5"   # 22:30 UTC Mon-Fri: after the US close all year
+    # GitHub's scheduler is best effort and can drop runs, so there are three slots after each US close.
+    # Later slots exit early once that day's snapshot is published.
+    - cron: "30 22 * * 1-5"   # 22:30 UTC Mon-Fri
+    - cron: "30 1 * * 2-6"    # 01:30 UTC, backup
+    - cron: "30 4 * * 2-6"    # 04:30 UTC, backup
   workflow_dispatch:
 
 concurrency:
@@ -40,7 +44,21 @@ jobs:
           cache: pip
       - run: pip install -e .
 
+      - name: Skip if today's snapshot is already published
+        id: check
+        run: |
+          if git fetch --depth 1 origin dashboard-data 2>/dev/null \
+             && git show FETCH_HEAD:manifest.json > /tmp/manifest.json 2>/dev/null \
+             && smp health --snapshot /tmp/manifest.json \
+             && [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Snapshot is already current; nothing to do." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Restore track record from the last snapshot
+        if: steps.check.outputs.skip != 'true'
         run: |
           if git fetch --depth 1 origin dashboard-data 2>/dev/null; then
             mkdir -p data
@@ -51,12 +69,16 @@ jobs:
           fi
 
       - name: Run pipeline
+        if: steps.check.outputs.skip != 'true'
         env:
           SMP_NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}   # optional: phone push via ntfy.sh
         run: smp run-all
 
       - name: Publish dashboard snapshot
+        # also after a partly failed run: publish whatever succeeded and keep the track record moving
+        if: steps.check.outputs.skip != 'true' && !cancelled()
         run: |
+          [ -f models/risk_predictions.parquet ] || { echo "No forecasts to publish"; exit 1; }
           smp publish --out site-data
           cd site-data
           git init -q -b dashboard-data
@@ -66,6 +88,10 @@ jobs:
               commit -q -m "Dashboard snapshot $(date -u +%Y-%m-%d)"
           git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
               dashboard-data
+
+      - name: Fail the run if data is still stale (GitHub then emails the repo owner)
+        if: steps.check.outputs.skip != 'true' && !cancelled()
+        run: smp health
 
       - uses: actions/upload-artifact@v4
         if: always()

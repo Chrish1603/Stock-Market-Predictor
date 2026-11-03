@@ -77,3 +77,12 @@ def test_project_root_found_without_a_source_checkout(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)  # or given explicitly
     monkeypatch.setenv("SMP_PROJECT_ROOT", str(repo))
     assert config.find_project_root() == repo.resolve()
+
+
+def test_summary_leads_with_problems():
+    from smp.notify import render
+
+    now = {"as_of": "2026-01-02", "regime": "normal", "market_vol": 0.12, "stocks": []}
+    title, text, md = render(now, [], ["stage 'ingest' failed: timeout"])
+    assert title.startswith("⚠ 1 problem: stage 'ingest' failed")
+    assert md.index("**Problems:**") < md.index("S&P 500")
