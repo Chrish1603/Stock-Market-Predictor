@@ -92,7 +92,14 @@ def predict_all(cfg: Config) -> pd.DataFrame:
     update_history(cfg, df)
     from smp.risk import predict_risk_all
 
-    predict_risk_all(cfg, issues)
+    risk = predict_risk_all(cfg, issues)
+    if not risk.empty:
+        from smp.risk_history import update_risk_history
+
+        try:
+            update_risk_history(cfg, risk)
+        except Exception as exc:  # the forecasts are saved; report the record problem
+            issues.append(f"risk track record not updated: {type(exc).__name__}: {exc}")
     for r in rows:
         log.info(
             "%s %dd (as of %s): P(up)=%.3f, predicted return=%+.4f%%",

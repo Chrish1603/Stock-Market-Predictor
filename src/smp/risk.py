@@ -286,6 +286,8 @@ def predict_risk_ticker(
         "forecast_vol": vol,
         "trailing_vol": float(latest["vol_20"].iloc[0] * np.sqrt(TRADING_DAYS)),
         "p_drop": p_drop,
+        # Historical drop rate from outcomes already known on as_of: the "no model" alternative
+        "base_rate": float(feats.loc[: latest.index[0], target_drop(horizon)].iloc[:-horizon].mean()),
         "drop_threshold": meta["drop_threshold"],
         "vol_model": meta["vol"]["selected"],
         "drop_model": meta["drop"]["selected"],
