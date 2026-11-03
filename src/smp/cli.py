@@ -76,14 +76,22 @@ def predict(config: Path | None = ConfigOpt):
 
 @app.command("track-record")
 def track_record(config: Path | None = ConfigOpt):
-    """Show how past live predictions turned out."""
+    """Show how past live predictions (risk forecasts and direction calls) turned out."""
     from smp.history import load_history, summarize
+    from smp.risk_history import load_risk_history, summarize_risk
 
-    summary = summarize(load_history(load_config(config)))
-    if summary.empty:
+    cfg = load_config(config)
+    fmt = lambda x: f"{x:.4f}"  # noqa: E731
+    risk, direction = summarize_risk(load_risk_history(cfg)), summarize(load_history(cfg))
+    if risk.empty and direction.empty:
         typer.echo("No predictions recorded yet. Run `smp predict`.")
         return
-    typer.echo(summary.to_string(index=False, float_format=lambda x: f"{x:.4f}"))
+    if not risk.empty:
+        typer.echo("Risk forecasts (vol errors are mean |log(forecast / realised)|; lower is better)")
+        typer.echo(risk.to_string(index=False, float_format=fmt))
+    if not direction.empty:
+        typer.echo("\nDirection calls" if not risk.empty else "Direction calls")
+        typer.echo(direction.to_string(index=False, float_format=fmt))
 
 
 @app.command("run-all")

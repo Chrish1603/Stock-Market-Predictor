@@ -58,6 +58,21 @@ def test_summary_changes_and_render():
     assert "### " in md and "not financial advice" in md
     assert changes(now, None) == []
 
+    now["stocks"][0]["drop_from_history"] = True
+    now["live_risk"] = [
+        {
+            "horizon": 20,
+            "scored": 12,
+            "vol_error": 0.18,
+            "trailing_vol_error": 0.25,
+            "brier": 0.12,
+            "base_rate_brier": 0.13,
+        }
+    ]
+    _, text, md = render(now, [])
+    assert "40% chance of a 5% drop (historical rate)" in text
+    assert "20-day: 12 scored. Volatility off by 18% on average (last month's figure: 25%)" in md
+
 
 def test_project_root_found_without_a_source_checkout(tmp_path, monkeypatch):
     """A regular (non-editable) install, as on Streamlit Cloud, must still find config/config.yaml."""

@@ -69,6 +69,7 @@ def build_summary(cfg: Config) -> dict:
                 "vol": float(r.forecast_vol),
                 "vol_pct": pct,
                 "p_drop": float(r.p_drop),
+                "drop_from_history": getattr(r, "drop_model", None) == "baseline",
                 "earnings_in": earnings_in,
             }
         )
@@ -78,7 +79,28 @@ def build_summary(cfg: Config) -> dict:
         "regime": regime["regime"] if regime else None,
         "market_vol": regime["forecast_vol"] if regime else None,
         "stocks": stocks,
+        "live_risk": live_risk_record(cfg),
     }
+
+
+def live_risk_record(cfg: Config) -> list[dict]:
+    """Live risk results per horizon, pooled over stocks (only horizons with scored forecasts)."""
+    from smp.risk_history import load_risk_history, summarize_risk
+
+    try:
+        hist = load_risk_history(cfg)
+    except Exception as exc:  # the summary must still go out
+        log.warning("risk track record unreadable: %s", exc)
+        return []
+    if hist.empty:
+        return []
+    s = summarize_risk(hist.assign(ticker="all"))
+    cols = ["horizon", "scored", "vol_error", "trailing_vol_error", "brier", "base_rate_brier"]
+    return [
+        {c: (int(r[c]) if c in ("horizon", "scored") else float(r[c])) for c in cols}
+        for _, r in s.iterrows()
+        if r["scored"]
+    ]
 
 
 def changes(now: dict, before: dict | None) -> list[str]:
@@ -107,7 +129,7 @@ def render(now: dict, diff: list[str], problems: list[str] | None = None) -> tup
         bits = [
             f"hold {s['weight']:.0%}",
             f"vol {s['vol']:.0%}" + (f" ({_vol_words(s['vol_pct'])})" if _vol_words(s["vol_pct"]) else ""),
-            f"{s['p_drop']:.0%} chance of a 5% drop",
+            f"{s['p_drop']:.0%} chance of a 5% drop" + (" (historical rate)" if s.get("drop_from_history") else ""),
         ]
         if s["earnings_in"] is not None:
             bits.append(f"earnings in {s['earnings_in']}d")
@@ -126,6 +148,14 @@ def render(now: dict, diff: list[str], problems: list[str] | None = None) -> tup
     if diff:
         md += ["**Changes since last run:** " + "; ".join(diff), ""]
     md += [f"- {line}" for line in lines]
+    if live := now.get("live_risk"):
+        md += ["", "**Live risk record** (forecasts scored after the fact, all stocks):"]
+        for r in live:
+            md.append(
+                f"- {r['horizon']}-day: {r['scored']} scored. Volatility off by {r['vol_error']:.0%} on average "
+                f"(last month's figure: {r['trailing_vol_error']:.0%}). Drop-chance Brier score {r['brier']:.3f} "
+                f"(historical rate: {r['base_rate_brier']:.3f}; lower is better)."
+            )
     md += ["", "_Educational project, not financial advice._"]
     return title, text, "\n".join(md)
 
