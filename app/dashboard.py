@@ -116,6 +116,12 @@ PALETTES = {
         band="rgba(42,120,214,0.10)",
         band_key="rgba(42,120,214,0.35)",  # the band's wash, strong enough to read as a legend key
         band2="rgba(235,104,52,0.10)",
+        # page background: a soft blue glow at the top fading into the normal surface (kept faint behind charts)
+        page_bg=(
+            "radial-gradient(1100px 520px at 88% -8%, rgba(42,120,214,0.13), transparent 70%), "
+            "radial-gradient(900px 480px at 8% -12%, rgba(27,175,122,0.07), transparent 70%), "
+            "linear-gradient(180deg, #f2f6fc 0%, #f8f9fa 380px, #fcfcfb 900px)"
+        ),
         calm_wash="rgba(12,163,12,0.10)",
         stressed_wash="rgba(208,59,59,0.16)",
         seq=["#cde2fb", "#86b6ef", "#2a78d6", "#184f95"],
@@ -136,6 +142,11 @@ PALETTES = {
         band="rgba(57,135,229,0.15)",
         band_key="rgba(57,135,229,0.45)",
         band2="rgba(217,89,38,0.16)",
+        page_bg=(
+            "radial-gradient(1100px 520px at 88% -8%, rgba(57,135,229,0.20), transparent 70%), "
+            "radial-gradient(900px 480px at 8% -12%, rgba(25,158,112,0.10), transparent 70%), "
+            "linear-gradient(180deg, #171a20 0%, #151617 380px, #141413 900px)"
+        ),
         calm_wash="rgba(12,163,12,0.16)",
         stressed_wash="rgba(208,59,59,0.24)",
         seq=["#104281", "#256abf", "#5598e7", "#b7d3f6"],
@@ -156,6 +167,7 @@ st.markdown(
       [data-testid="stSidebar"] h1 {{ font-size: 1.3rem; letter-spacing: -0.01em; }}
       .block-container {{ padding-top: 2rem; padding-bottom: 3rem; max-width: 1280px; }}
       [data-testid="stHeader"] {{ background: transparent; }}
+      [data-testid="stApp"] {{ background: {C["page_bg"]}; background-attachment: fixed; }}
       h1, h2, h3 {{ letter-spacing: -0.015em; }}
       .stTabs [data-baseweb="tab-list"] {{ gap: 1.6rem; }}
       .stTabs [data-baseweb="tab"] {{ font-size: 0.95rem; padding-left: 0; padding-right: 0; }}
