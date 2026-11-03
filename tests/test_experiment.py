@@ -37,7 +37,7 @@ def sandbox(tmp_path, monkeypatch):
     base = {
         "data": {"tickers": ["AAA", "BBB"], "market_tickers": [], "universe": [], "earnings": False},
         "train": {"horizons": [1], "n_splits": 3, "holdout_days": 100},
-        "risk": {"horizons": [5]},
+        "risk": {"horizons": [5], "allocation_horizon": 5},
         "paths": paths,
     }
     cfg_file = tmp_path / "config.yaml"

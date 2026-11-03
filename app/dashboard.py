@@ -75,7 +75,18 @@ def choose_data_root() -> bool:
     return True
 
 
-SNAPSHOT = choose_data_root()
+try:
+    SNAPSHOT = choose_data_root()
+except Exception as exc:  # network or GitHub problem: explain instead of showing a traceback
+    st.error(
+        "Couldn't download the latest data snapshot, so there's nothing to show yet. "
+        "This is usually a temporary network or GitHub problem."
+    )
+    st.caption(f"Details: {type(exc).__name__}: {exc}")
+    if st.button("Try again"):
+        download_snapshot.clear()
+        st.rerun()
+    st.stop()
 CFG = load_config()
 
 # --- colours: validated reference palette, stepped separately for light and dark -------------

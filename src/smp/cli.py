@@ -9,7 +9,7 @@ from pathlib import Path
 import typer
 
 from smp import pipeline
-from smp.config import load_config
+from smp.config import ConfigError, load_config
 
 app = typer.Typer(help="Stock Market Predictor pipeline.", no_args_is_help=True)
 ConfigOpt = typer.Option(None, "--config", "-c", help="Path to config YAML.")
@@ -33,7 +33,11 @@ def _run(cfg, stages: list[str] | None = None, **kwargs) -> None:
 
 
 def _cfg(config: Path | None, tune: bool = False):
-    cfg = load_config(config)
+    try:
+        cfg = load_config(config)
+    except ConfigError as exc:
+        typer.echo(f"Config error: {exc}", err=True)
+        raise typer.Exit(2) from None
     if tune:
         cfg.train.tune = True
     pipeline.setup_logging(cfg.paths.logs)
@@ -106,7 +110,7 @@ def health(
         current = as_of is not None and not is_stale(date.fromisoformat(as_of))
         typer.echo(f"snapshot as of {as_of}; expected {expected_latest_close()}: {'current' if current else 'stale'}")
         raise typer.Exit(0 if current else 1)
-    problems = data_problems(load_config(config))
+    problems = data_problems(_cfg(config))
     for p in problems:
         typer.echo(f"problem: {p}")
     if not problems:

@@ -267,16 +267,18 @@ def risk_predictions_path(cfg: Config):
     return cfg.paths.models / "risk_predictions.parquet"
 
 
-def predict_risk_ticker(cfg: Config, ticker: str, feats: pd.DataFrame, horizon: int) -> dict | None:
+def predict_risk_ticker(
+    cfg: Config, ticker: str, feats: pd.DataFrame, horizon: int, issues: list[str] | None = None
+) -> dict | None:
+    from smp.predict import latest_inputs, load_model
+
     d = risk_dir(cfg, ticker, horizon)
     if not (d / "metrics.json").exists():
         return None
     meta = json.loads((d / "metrics.json").read_text())
-    latest = feats[meta["features"]].dropna().tail(1)
-    if latest.empty:
-        return None
-    vol = float(np.exp(joblib.load(d / "vol.joblib").predict(latest)[0]))
-    p_drop = float(joblib.load(d / "drop.joblib").predict_proba(latest)[0, 1])
+    latest = latest_inputs(feats, meta["features"], f"{ticker} risk {horizon}d", issues if issues is not None else [])
+    vol = float(np.exp(load_model(d / "vol.joblib").predict(latest)[0]))
+    p_drop = float(load_model(d / "drop.joblib").predict_proba(latest)[0, 1])
     return {
         "ticker": ticker,
         "horizon": horizon,
@@ -290,7 +292,7 @@ def predict_risk_ticker(cfg: Config, ticker: str, feats: pd.DataFrame, horizon: 
     }
 
 
-def predict_risk_all(cfg: Config) -> pd.DataFrame:
+def predict_risk_all(cfg: Config, issues: list[str] | None = None) -> pd.DataFrame:
     """Latest risk forecasts and suggested position size for every ticker."""
     from smp.allocation import suggested_weight
 
@@ -303,8 +305,13 @@ def predict_risk_all(cfg: Config) -> pd.DataFrame:
             continue
         feats = pd.read_parquet(p)
         for h in cfg.risk.horizons:
-            if r := predict_risk_ticker(cfg, ticker, feats, h):
-                rows.append(r)
+            try:
+                if r := predict_risk_ticker(cfg, ticker, feats, h, issues):
+                    rows.append(r)
+            except Exception as exc:  # report and carry on with the other tickers
+                if issues is None:
+                    raise
+                issues.append(f"{ticker} risk {h}d: {exc}")
     df = pd.DataFrame(rows)
     if df.empty:
         return df
