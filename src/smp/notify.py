@@ -23,6 +23,7 @@ import pandas as pd
 
 from smp.config import Config
 from smp.features import TRADING_DAYS, features_path
+from smp.safeio import atomic_write_json
 
 log = logging.getLogger(__name__)
 
@@ -208,6 +209,6 @@ def notify(cfg: Config) -> dict:
         sent.append("ntfy")
     if now["stocks"]:  # keep the last good state for change tracking
         cfg.paths.history.mkdir(parents=True, exist_ok=True)
-        state.write_text(json.dumps(now, indent=2))
+        atomic_write_json(state, now)
     log.info("summary: %s%s", title, f" (sent via {', '.join(sent)})" if sent else "")
     return {"title": title, "text": text, "changes": diff, "problems": problems, "sent": sent}

@@ -11,6 +11,7 @@ import pandas as pd
 from smp.config import Config
 from smp.features import features_path
 from smp.history import update_history
+from smp.safeio import atomic_write_parquet
 from smp.train import model_dir
 
 log = logging.getLogger(__name__)
@@ -52,7 +53,7 @@ def predict_all(cfg: Config) -> pd.DataFrame:
     rows = [r for t in cfg.data.tickers for h in cfg.train.horizons if (r := predict_ticker(cfg, t, h))]
     df = pd.DataFrame(rows)
     cfg.paths.models.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(predictions_path(cfg), index=False)
+    atomic_write_parquet(df, predictions_path(cfg), index=False)
     update_history(cfg, df)
     from smp.risk import predict_risk_all
 

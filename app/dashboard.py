@@ -318,11 +318,18 @@ if SNAPSHOT:
 elif st.sidebar.button(
     "Refresh data", help="Downloads new prices and updates forecasts. Does not retrain.", width="stretch"
 ):
+    from smp.safeio import PipelineBusy
+
     with st.spinner("Downloading prices and updating forecasts..."):
         pipeline.setup_logging(CFG.paths.logs)
-        pipeline.refresh(CFG)
+        try:
+            pipeline.refresh(CFG)
+            st.sidebar.success("Updated")
+        except PipelineBusy:
+            st.sidebar.info("The scheduled run is in progress; try again in a few minutes.")
+        except pipeline.PipelineError as exc:
+            st.sidebar.warning(f"Partly updated. Failed: {', '.join(f['stage'] for f in exc.failures)}.")
     st.cache_data.clear()
-    st.sidebar.success("Updated")
 st.sidebar.caption("Models retrain in the daily scheduled run (`smp run-all`).")
 st.sidebar.divider()
 st.sidebar.caption("Educational project, not financial advice.")

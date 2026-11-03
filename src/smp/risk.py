@@ -29,6 +29,7 @@ from smp.config import Config, ticker_to_filename
 from smp.evaluate import classification_metrics
 from smp.features import TRADING_DAYS, feature_columns, features_path, target_drop, target_logvol
 from smp.models import LGBM_DEFAULTS, feature_importance
+from smp.safeio import atomic_write_parquet
 from smp.train import split_dev_holdout, walk_forward_splits
 
 log = logging.getLogger(__name__)
@@ -311,7 +312,7 @@ def predict_risk_all(cfg: Config) -> pd.DataFrame:
     df["suggested_weight"] = df["ticker"].map(
         {t: suggested_weight(cfg, r.trailing_vol, r.forecast_vol) for t, r in alloc.iterrows()}
     )
-    df.to_parquet(risk_predictions_path(cfg), index=False)
+    atomic_write_parquet(df, risk_predictions_path(cfg), index=False)
     mkt = df[(df["ticker"] == cfg.risk.market_ticker) & (df["horizon"] == 20)]
     if not mkt.empty:
         from smp.regime import current_regime

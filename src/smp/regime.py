@@ -20,6 +20,7 @@ import pandas as pd
 from smp.allocation import out_of_sample_forecasts
 from smp.config import Config
 from smp.features import TRADING_DAYS, features_path, target_drop, target_logvol, target_return
+from smp.safeio import atomic_write_json
 
 log = logging.getLogger(__name__)
 
@@ -157,7 +158,7 @@ def current_regime(cfg: Config, forecast_vol: float) -> dict:
     }
     out = market_dir(cfg)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "regime.json").write_text(json.dumps(info, indent=2))
+    atomic_write_json(out / "regime.json", info)
     log.info(
         "market regime (%s, %s): %s | vol forecast %.0f%% (percentile %.0f), breadth %s, trend %s",
         info["ticker"],

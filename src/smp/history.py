@@ -7,6 +7,7 @@ before the outcome existed, so they can't have been tuned to it.
 from __future__ import annotations
 
 import logging
+import shutil
 from datetime import datetime, timezone
 
 import numpy as np
@@ -14,6 +15,7 @@ import pandas as pd
 
 from smp.clean import clean_path
 from smp.config import Config
+from smp.safeio import atomic_write_parquet
 
 log = logging.getLogger(__name__)
 
@@ -25,19 +27,48 @@ def history_path(cfg: Config):
     return cfg.paths.history / "predictions.parquet"
 
 
-def load_history(cfg: Config) -> pd.DataFrame:
-    p = history_path(cfg)
-    if not p.exists():
-        return pd.DataFrame()
+def backup_path(cfg: Config):
+    return cfg.paths.history / "predictions.backup.parquet"
+
+
+class HistoryError(RuntimeError):
+    """The track record would be damaged; nothing was written."""
+
+
+def _read(p) -> pd.DataFrame:
     hist = pd.read_parquet(p)
     if "horizon" not in hist:  # records from before multi-horizon support were 1-day predictions
         hist["horizon"] = 1
     return hist
 
 
+def load_history(cfg: Config) -> pd.DataFrame:
+    """The track record; falls back to the backup copy if the main file is unreadable."""
+    p, b = history_path(cfg), backup_path(cfg)
+    if not p.exists() and not b.exists():
+        return pd.DataFrame()
+    try:
+        return _read(p)
+    except Exception as exc:
+        if not b.exists():
+            raise HistoryError(f"track record {p} is unreadable and there is no backup: {exc}") from exc
+        log.error("track record %s is unreadable (%s); using the backup %s", p, exc, b)
+        return _read(b)
+
+
 def save_history(cfg: Config, hist: pd.DataFrame) -> None:
-    cfg.paths.history.mkdir(parents=True, exist_ok=True)
-    hist.sort_values(KEY).reset_index(drop=True).to_parquet(history_path(cfg), index=False)
+    """Write the track record safely: never drop existing predictions, keep the previous file as a backup."""
+    p = history_path(cfg)
+    if p.exists() or backup_path(cfg).exists():
+        old = load_history(cfg)
+        if len(old):
+            old_keys = set(map(tuple, old[KEY].astype(str).to_numpy()))
+            new_keys = set(map(tuple, hist[KEY].astype(str).to_numpy())) if len(hist) else set()
+            if missing := old_keys - new_keys:
+                raise HistoryError(f"refusing to save: {len(missing)} recorded prediction(s) would be lost")
+        if p.exists():
+            shutil.copy2(p, backup_path(cfg))
+    atomic_write_parquet(hist.sort_values(KEY).reset_index(drop=True), p, index=False)
 
 
 def append_predictions(hist: pd.DataFrame, preds: pd.DataFrame, made_at: datetime | None = None) -> pd.DataFrame:

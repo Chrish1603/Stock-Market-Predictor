@@ -15,6 +15,23 @@ app = typer.Typer(help="Stock Market Predictor pipeline.", no_args_is_help=True)
 ConfigOpt = typer.Option(None, "--config", "-c", help="Path to config YAML.")
 
 
+def _run(cfg, stages: list[str] | None = None, **kwargs) -> None:
+    """Run stages (or the full pipeline); turn failures into a clear message and exit code 1."""
+    from smp.safeio import PipelineBusy
+
+    try:
+        if stages is None:
+            pipeline.run_all(cfg, **kwargs)
+        else:
+            pipeline.run(cfg, stages)
+    except PipelineBusy as exc:
+        typer.echo(f"Not started: {exc}.", err=True)
+        raise typer.Exit(1) from None
+    except pipeline.PipelineError as exc:
+        typer.echo(f"Finished with {len(exc.failures)} failed stage(s): {exc}", err=True)
+        raise typer.Exit(1) from None
+
+
 def _cfg(config: Path | None, tune: bool = False):
     cfg = load_config(config)
     if tune:
@@ -26,31 +43,31 @@ def _cfg(config: Path | None, tune: bool = False):
 @app.command()
 def ingest(config: Path | None = ConfigOpt):
     """Download or update raw market data."""
-    pipeline.run(_cfg(config), ["ingest"])
+    _run(_cfg(config), ["ingest"])
 
 
 @app.command()
 def clean(config: Path | None = ConfigOpt):
     """Validate and clean raw data."""
-    pipeline.run(_cfg(config), ["clean"])
+    _run(_cfg(config), ["clean"])
 
 
 @app.command()
 def features(config: Path | None = ConfigOpt):
     """Build features and targets."""
-    pipeline.run(_cfg(config), ["features"])
+    _run(_cfg(config), ["features"])
 
 
 @app.command()
 def train(config: Path | None = ConfigOpt, tune: bool = typer.Option(False, help="Tune LightGBM with Optuna.")):
     """Train and evaluate models."""
-    pipeline.run(_cfg(config, tune), ["train"])
+    _run(_cfg(config, tune), ["train"])
 
 
 @app.command()
 def predict(config: Path | None = ConfigOpt):
     """Write the latest next-day predictions."""
-    pipeline.run(_cfg(config), ["predict"])
+    _run(_cfg(config), ["predict"])
 
 
 @app.command("track-record")
@@ -73,7 +90,7 @@ def run_all(
     skip_train: bool = typer.Option(False, help="Reuse existing models."),
 ):
     """Run the full pipeline: ingest -> clean -> features -> train -> predict."""
-    pipeline.run_all(_cfg(config, tune), skip_ingest=skip_ingest, skip_train=skip_train)
+    _run(_cfg(config, tune), skip_ingest=skip_ingest, skip_train=skip_train)
 
 
 @app.command()
@@ -100,7 +117,7 @@ def health(
 @app.command("notify")
 def notify_cmd(config: Path | None = ConfigOpt):
     """Build today's summary and send it (macOS / ntfy, if configured)."""
-    pipeline.run(_cfg(config), ["notify"])
+    _run(_cfg(config), ["notify"])
     typer.echo((load_config(config).paths.logs / "summary.md").read_text())
 
 
