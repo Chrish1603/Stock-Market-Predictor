@@ -21,13 +21,16 @@ out-of-sample statistics. It runs itself every trading day, keeps a public track
 All out of sample. Every claim is tested with confidence intervals; see [docs/RESULTS.md](docs/RESULTS.md).
 
 - **Risk is predictable.** Volatility forecasts beat both "same as last month" (R² +0.31) and the standard HAR
-  model (+0.05), p < 0.001. For the S&P 500 they explain 42% of the variation in 5-day volatility. Earnings dates
+  model (+0.05), p < 0.001. For the S&P 500 they explain 42% of the variation in 5-day volatility, and the edge
+  holds over 1997–2026 too (better than both in 15 of 16 periods). Earnings dates
   measurably help (p = 0.03), and drop probabilities beat the historical rate, slightly (p = 0.02).
 - **Direction is barely predictable.** The best models beat a coin flip by a statistically clear but tiny margin
   (ROC-AUC 0.52 vs 0.50). No extra input, and pooling 63 stocks into one model, made a detectable difference.
-- **Volatility targeting halves drawdowns.** On a 2013–2026 out-of-sample backtest it cut the 4-stock portfolio's
-  worst drawdown from −37.5% to −17.8%. Its Sharpe ratio (1.40 vs 1.31) is *not* clearly better than buy-and-hold
-  (p = 0.38): the benefit is a smoother ride, not more return per unit of risk.
+- **Volatility targeting softens sudden crashes, not slow ones.** On a 2013–2026 out-of-sample backtest it cut the
+  4-stock portfolio's worst drawdown from −37.5% to −17.8%. Tested on the S&P 500 back to 1997, it cut 2008 from
+  −55% to −34% and COVID from −33% to −17%, but the slow 2000–02 decline only from −47% to −42%, because volatility
+  stayed moderate while prices fell. Its Sharpe ratio is *not* clearly better than buy-and-hold in either test
+  (p = 0.38, p = 0.34): the benefit is a smoother ride, not more return per unit of risk.
 - **A better forecast didn't mean better sizing.** Sizing with last month's volatility did as well as sizing with
   the model's forecast, so the simpler rule is the default.
 
@@ -71,6 +74,9 @@ corrected p-values rather than raw averages.
   A random-walk formula driven by the volatility forecast, then calibrated, beat it.
 - **A better forecast isn't always a better decision.** The model forecasts volatility more accurately than last
   month's figure, yet sizing positions with it was no better.
+- **The test period shapes the story.** "Vol targeting halves drawdowns" was true from 2010 on and not before.
+  Extending the S&P 500 back to 1993 put two very different bear markets in the test, and only one of them
+  matched the claim.
 
 ## Quick start
 
@@ -90,6 +96,7 @@ smp run-all --skip-train         # refresh data and forecasts with the existing 
 smp ingest | clean | features | train | predict | notify    # one stage
 smp track-record                 # how past live risk forecasts and direction calls turned out
 smp experiment run experiments/risk_vol_models.yaml         # compare config variants
+smp long-history                 # S&P 500 risk models from 1993, tested through past crashes (~1 min)
 smp publish --out site-data      # build the dashboard snapshot
 ```
 
@@ -173,6 +180,19 @@ where nothing beats the historical drop rate, the dashboard shows the historical
 Vol targeting holds about a third in cash on average, so it gives up return in a strong bull market in exchange
 for half the drawdown. This period was unusually good for these four stocks, which flatters buy-and-hold.
 
+**Through past crashes** (S&P 500 only, data from 1993, out of sample from 1997; return from the index's peak to
+its trough; [long_history](experiments/reports/long_history.md)):
+
+| Crisis | Buy & hold | Vol target, trailing vol | Average holding |
+|---|---|---|---|
+| Dot-com bust, 2000–02 | −46% | −41% | 72% |
+| Financial crisis, 2007–09 | −53% | −32% | 62% |
+| COVID crash, 2020 | −28% | −16% | 50% |
+| 2022 bear market | −23% | −18% | 68% |
+| Whole period, 1997–2026: CAGR / max drawdown | 9.6% / −55% | 8.0% / −44% | 85% |
+
+The rebuild uses SPY alone (no cross-sectional ranks or breadth, which need the 2010+ stock universe).
+
 **Market regime** (S&P 500, out of sample; what happened over the next 20 trading days):
 
 | Regime | Share of days | Volatility | Chance of a 5% drop | Average return |
@@ -182,7 +202,8 @@ for half the drawdown. This period was unusually good for these four stocks, whi
 | Stressed | 14% | 24% | 24% | +3.0% |
 
 The labels separate risk well, but returns were higher after stressed days (rebounds): a risk signal, not a sell
-signal. Known limitation: the label switches in and out of "stressed" often (73 spells in 13 years).
+signal. Known limitation: the label switches in and out of "stressed" often (73 spells in 13 years, and 128 in
+29 years on the long S&P 500 history).
 
 **Direction models:** see [direction_inputs](experiments/reports/direction_inputs.md) and
 [direction_scope](experiments/reports/direction_scope.md). Optional inputs (Treasury yields, sector funds) and a

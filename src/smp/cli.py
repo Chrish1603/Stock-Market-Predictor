@@ -147,6 +147,20 @@ def publish(
     typer.echo(f"Wrote {m['files']} files ({m['bytes'] / 1e6:.1f} MB), data as of {m['as_of']}, to {out}")
 
 
+@app.command("long-history")
+def long_history():
+    """Rebuild the market ticker's risk models from 1993 and test them through past crashes (~5 min)."""
+    from smp.experiment import REPORTS_DIR
+    from smp.long_history import NAME, run_long_history
+
+    pipeline.setup_logging(load_config().paths.logs)
+    r = run_long_history()
+    typer.echo(f"\nReport: {REPORTS_DIR / (NAME + '.md')}")
+    for group in ("models", "strategies"):
+        for n, v in r[group].items():
+            typer.echo(f"  vs {n}: {v['verdict']} (diff {v['diff']:+.3f}, p={v['p_holm']:.3f})")
+
+
 experiment_app = typer.Typer(help="Compare config variants with confidence intervals.", no_args_is_help=True)
 app.add_typer(experiment_app, name="experiment")
 

@@ -30,6 +30,16 @@ Does one pooled model trained on 63 stocks beat a separate model per stock? *(ru
 
 - **pooled** vs `per_ticker`: no clear difference (Δ -0.0053, p = 0.641)
 
+## [long_history](../experiments/reports/long_history.md)
+
+Do the risk results hold up over 30 years, including the 2000-02 and 2008 crashes? *(run 2026-11-03)*
+
+- chosen model vs **persistence**: better (Δ +0.2562, p < 0.001)
+- chosen model vs **har**: better (Δ +0.1081, p < 0.001)
+- default strategy vs **buy_hold**: no clear difference (Δ +0.0716, p = 0.337)
+- default strategy vs **model_vol_target**: no clear difference (Δ +0.0519, p = 0.337)
+- default strategy vs **model_vol_target_drop_filter**: no clear difference (Δ +0.0735, p = 0.165)
+
 ## [risk_drop_models](../experiments/reports/risk_drop_models.md)
 
 Are the "chance of a 5% drop" probabilities better than quoting the historical drop rate? *(run 2026-11-03)*

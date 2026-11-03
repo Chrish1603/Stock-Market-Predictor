@@ -1,0 +1,627 @@
+{
+  "name": "long_history",
+  "question": "Do the risk results hold up over 30 years, including the 2000-02 and 2008 crashes?",
+  "kind": "risk",
+  "metric": "vol.r2",
+  "control": "default",
+  "date": "2026-11-03",
+  "ticker": "SPY",
+  "start": "1993-01-29",
+  "variants": {},
+  "models": {
+    "persistence": {
+      "mean": 0.11394099941614588,
+      "diff": 0.2561584420260714,
+      "ci_low": 0.16919047403404358,
+      "ci_high": 0.34022935544450095,
+      "p_value": 0.0002,
+      "n_pairs": 16,
+      "n_periods": 8,
+      "wins": 15,
+      "losses": 1,
+      "p_holm": 0.0004,
+      "verdict": "better"
+    },
+    "har": {
+      "mean": 0.2620405349786534,
+      "diff": 0.10805890646356385,
+      "ci_low": 0.05116780828503418,
+      "ci_high": 0.15610317390469178,
+      "p_value": 0.0002,
+      "n_pairs": 16,
+      "n_periods": 8,
+      "wins": 15,
+      "losses": 1,
+      "p_holm": 0.0004,
+      "verdict": "better"
+    }
+  },
+  "strategies": {
+    "buy_hold": {
+      "diff": 0.07163722047641086,
+      "ci_low": -0.05128333220553256,
+      "ci_high": 0.20532420910356805,
+      "p_value": 0.273,
+      "n_days": 7403,
+      "mean": 0.5699095078335915,
+      "p_holm": 0.337,
+      "verdict": "no clear difference"
+    },
+    "model_vol_target": {
+      "diff": 0.05186978548611876,
+      "ci_low": -0.02311659989208049,
+      "ci_high": 0.12671913580457336,
+      "p_value": 0.1685,
+      "n_days": 7403,
+      "mean": 0.5896756076825502,
+      "p_holm": 0.337,
+      "verdict": "no clear difference"
+    },
+    "model_vol_target_drop_filter": {
+      "diff": 0.0734845663100564,
+      "ci_low": -0.0046911593511005795,
+      "ci_high": 0.14656827381158086,
+      "p_value": 0.055,
+      "n_days": 7403,
+      "mean": 0.5680622867742418,
+      "p_holm": 0.165,
+      "verdict": "no clear difference"
+    }
+  },
+  "vol_r2": 0.3700994414422173,
+  "periods": {
+    "5": [
+      {
+        "fold": 0,
+        "start": "1997-05-27",
+        "end": "2000-12-06",
+        "lightgbm": 0.019847756177700404,
+        "persistence": -0.07926227403869435,
+        "har": -0.044195638211105726,
+        "selected": "lightgbm"
+      },
+      {
+        "fold": 1,
+        "start": "2000-12-07",
+        "end": "2004-07-01",
+        "lightgbm": 0.4645435202651441,
+        "persistence": 0.2770259320065882,
+        "har": 0.3978057705293724,
+        "selected": "lightgbm"
+      },
+      {
+        "fold": 2,
+        "start": "2004-07-02",
+        "end": "2008-01-17",
+        "lightgbm": 0.33082570860768334,
+        "persistence": 0.16442207002706744,
+        "har": 0.2158208581844776,
+        "selected": "lightgbm"
+      },
+      {
+        "fold": 3,
+        "start": "2008-01-18",
+        "end": "2011-08-03",
+        "lightgbm": 0.5204963585667655,
+        "persistence": 0.43745838361084777,
+        "har": 0.487072148328631,
+        "selected": "lightgbm"
+      },
+      {
+        "fold": 4,
+        "start": "2011-08-04",
+        "end": "2015-02-23",
+        "lightgbm": 0.49777372516608487,
+        "persistence": 0.0937865856930965,
+        "har": 0.27591576536531826,
+        "selected": "lightgbm"
+      },
+      {
+        "fold": 5,
+        "start": "2015-02-24",
+        "end": "2018-09-07",
+        "lightgbm": 0.383371428844836,
+        "persistence": 0.14797812784531028,
+        "har": 0.2768634428013417,
+        "selected": "lightgbm"
+      },
+      {
+        "fold": 6,
+        "start": "2018-09-10",
+        "end": "2022-03-25",
+        "lightgbm": 0.585703935101059,
+        "persistence": 0.2614939325834439,
+        "har": 0.36482352205490476,
+        "selected": "lightgbm"
+      },
+      {
+        "fold": 7,
+        "start": "2022-03-28",
+        "end": "2025-10-16",
+        "lightgbm": 0.5107947128321642,
+        "persistence": 0.19351974949977746,
+        "har": 0.32540462835334893,
+        "selected": "lightgbm"
+      }
+    ],
+    "20": [
+      {
+        "fold": 0,
+        "start": "1997-05-29",
+        "end": "2000-12-04",
+        "lightgbm": -0.3188920833606179,
+        "persistence": -0.43268519807057726,
+        "har": -0.3828510451847096,
+        "selected": "lightgbm"
+      },
+      {
+        "fold": 1,
+        "start": "2000-12-05",
+        "end": "2004-06-23",
+        "lightgbm": 0.5657323018558031,
+        "persistence": 0.2905369712744714,
+        "har": 0.5055945116476257,
+        "selected": "lightgbm"
+      },
+      {
+        "fold": 2,
+        "start": "2004-06-24",
+        "end": "2008-01-03",
+        "lightgbm": 0.39314502969045373,
+        "persistence": 0.035822995824970394,
+        "har": 0.21420904280611874,
+        "selected": "lightgbm"
+      },
+      {
+        "fold": 3,
+        "start": "2008-01-04",
+        "end": "2011-07-14",
+        "lightgbm": 0.411989608370532,
+        "persistence": 0.42200219387718074,
+        "har": 0.5491180068982675,
+        "selected": "lightgbm"
+      },
+      {
+        "fold": 4,
+        "start": "2011-07-15",
+        "end": "2015-01-27",
+        "lightgbm": 0.4122969294530088,
+        "persistence": -0.08363113717335402,
+        "har": 0.2756482287370985,
+        "selected": "lightgbm"
+      },
+      {
+        "fold": 5,
+        "start": "2015-01-28",
+        "end": "2018-08-07",
+        "lightgbm": 0.29232158693983046,
+        "persistence": -0.039337293213752345,
+        "har": 0.18908572148519143,
+        "selected": "lightgbm"
+      },
+      {
+        "fold": 6,
+        "start": "2018-08-08",
+        "end": "2022-02-16",
+        "lightgbm": 0.32880101761782743,
+        "persistence": -0.0685901941467113,
+        "har": 0.17833976300924537,
+        "selected": "lightgbm"
+      },
+      {
+        "fold": 7,
+        "start": "2022-02-17",
+        "end": "2025-09-04",
+        "lightgbm": 0.5228395269472021,
+        "persistence": 0.2025151450586694,
+        "har": 0.3639938328533291,
+        "selected": "lightgbm"
+      }
+    ]
+  },
+  "control_strategy": {
+    "name": "trailing_vol_target",
+    "sharpe": 0.6415418897553734,
+    "max_drawdown": -0.43486237717453313
+  },
+  "allocation": {
+    "all": {
+      "buy_hold": {
+        "total_return": 13.714714451828124,
+        "cagr": 0.09584863030008361,
+        "volatility": 0.19349090388059748,
+        "sharpe": 0.5699095078335915,
+        "max_drawdown": -0.5518945166026111,
+        "calmar": 0.17367201053222084,
+        "avg_weight": 1.0,
+        "turnover_per_year": 0.0,
+        "start": "1997-05-29",
+        "end": "2026-10-30"
+      },
+      "trailing_vol_target": {
+        "total_return": 8.684851894291596,
+        "cagr": 0.08035591879406878,
+        "volatility": 0.13465593627392491,
+        "sharpe": 0.6415418897553734,
+        "max_drawdown": -0.43486237717453313,
+        "calmar": 0.18478471123708576,
+        "avg_weight": 0.8537167153702311,
+        "turnover_per_year": 1.5030867978466587,
+        "start": "1997-05-29",
+        "end": "2026-10-30"
+      },
+      "model_vol_target": {
+        "total_return": 8.16009244370991,
+        "cagr": 0.07830921197285123,
+        "volatility": 0.1459749033227994,
+        "sharpe": 0.5896756076825502,
+        "max_drawdown": -0.4550520901735817,
+        "calmar": 0.17208845682475565,
+        "avg_weight": 0.9007233168745156,
+        "turnover_per_year": 2.2864153408301386,
+        "start": "1997-05-29",
+        "end": "2026-10-30"
+      },
+      "model_vol_target_drop_filter": {
+        "total_return": 6.7539449381319665,
+        "cagr": 0.07220932270992986,
+        "volatility": 0.1400555873377976,
+        "sharpe": 0.5680622867742418,
+        "max_drawdown": -0.43903061838579616,
+        "calmar": 0.16447445732925225,
+        "avg_weight": 0.8893982981037262,
+        "turnover_per_year": 2.665440190109857,
+        "start": "1997-05-29",
+        "end": "2026-10-30"
+      }
+    },
+    "before_2010": {
+      "buy_hold": {
+        "total_return": 0.6506659119584464,
+        "cagr": 0.04064565460292635,
+        "volatility": 0.22076092762559546,
+        "sharpe": 0.29069862481108294,
+        "max_drawdown": -0.5518945166026111,
+        "calmar": 0.07364750578269116,
+        "avg_weight": 1.0,
+        "turnover_per_year": 0.0,
+        "start": "1997-05-29",
+        "end": "2009-12-31"
+      },
+      "trailing_vol_target": {
+        "total_return": 0.48188026591653577,
+        "cagr": 0.03176035046238179,
+        "volatility": 0.14380563670455906,
+        "sharpe": 0.289449755498435,
+        "max_drawdown": -0.43486237717453313,
+        "calmar": 0.07303540643994294,
+        "avg_weight": 0.8031547091752688,
+        "turnover_per_year": 1.9646418853571381,
+        "start": "1997-05-29",
+        "end": "2009-12-31"
+      },
+      "model_vol_target": {
+        "total_return": 0.4318445722166879,
+        "cagr": 0.0289469509803566,
+        "volatility": 0.16226412359239425,
+        "sharpe": 0.2570457093917096,
+        "max_drawdown": -0.4550520901735817,
+        "calmar": 0.06361238988994568,
+        "avg_weight": 0.8646550470526847,
+        "turnover_per_year": 2.5638075318467686,
+        "start": "1997-05-29",
+        "end": "2009-12-31"
+      },
+      "model_vol_target_drop_filter": {
+        "total_return": 0.3627915750653017,
+        "cagr": 0.024911826216349464,
+        "volatility": 0.15262449115010787,
+        "sharpe": 0.23764251876283277,
+        "max_drawdown": -0.43903061838579616,
+        "calmar": 0.05674279918777399,
+        "avg_weight": 0.8451441623681855,
+        "turnover_per_year": 2.9957920557948103,
+        "start": "1997-05-29",
+        "end": "2009-12-31"
+      }
+    },
+    "from_2010": {
+      "buy_hold": {
+        "total_return": 7.9144110538816435,
+        "cagr": 0.1390981599617136,
+        "volatility": 0.17022744694878705,
+        "sharpe": 0.8505892360481656,
+        "max_drawdown": -0.33717265401236174,
+        "calmar": 0.41254282726206454,
+        "avg_weight": 1.0,
+        "turnover_per_year": 0.0,
+        "start": "2010-01-04",
+        "end": "2026-10-30"
+      },
+      "trailing_vol_target": {
+        "total_return": 5.535515801812444,
+        "cagr": 0.11824107914209803,
+        "volatility": 0.12735077444740342,
+        "sharpe": 0.9415677475176444,
+        "max_drawdown": -0.18907536770872202,
+        "calmar": 0.6253647980431434,
+        "avg_weight": 0.8915814825892318,
+        "turnover_per_year": 1.1574384096094223,
+        "start": "2010-01-04",
+        "end": "2026-10-30"
+      },
+      "model_vol_target": {
+        "total_return": 5.397406968222023,
+        "cagr": 0.11682011566662176,
+        "volatility": 0.13245254304738874,
+        "sharpe": 0.9007336277271147,
+        "max_drawdown": -0.20422140998478122,
+        "calmar": 0.5720267805188854,
+        "avg_weight": 0.9277340457512468,
+        "turnover_per_year": 2.0712752444687466,
+        "start": "2010-01-04",
+        "end": "2026-10-30"
+      },
+      "model_vol_target_drop_filter": {
+        "total_return": 4.689751154911847,
+        "cagr": 0.10905325027098689,
+        "volatility": 0.12982991159838142,
+        "sharpe": 0.8625084148235304,
+        "max_drawdown": -0.21679275397683395,
+        "calmar": 0.5030299595836127,
+        "avg_weight": 0.9225392407641714,
+        "turnover_per_year": 2.4106397656835976,
+        "start": "2010-01-04",
+        "end": "2026-10-30"
+      }
+    }
+  },
+  "crises": [
+    {
+      "crisis": "1998 LTCM / Russia",
+      "start": "1998-07-17",
+      "end": "1998-10-08",
+      "buy_hold": {
+        "return": -0.16601546334182626,
+        "max_drawdown": -0.19030051218286115,
+        "avg_weight": 1.0
+      },
+      "trailing_vol_target": {
+        "return": -0.1307115735327864,
+        "max_drawdown": -0.1423187950769479,
+        "avg_weight": 0.5894998043001217
+      },
+      "model_vol_target": {
+        "return": -0.14821845465040295,
+        "max_drawdown": -0.17110420585151442,
+        "avg_weight": 0.8754934805727391
+      },
+      "model_vol_target_drop_filter": {
+        "return": -0.196028070731168,
+        "max_drawdown": -0.20315800182016353,
+        "avg_weight": 0.8787364354016072
+      }
+    },
+    {
+      "crisis": "Dot-com bust",
+      "start": "2000-03-24",
+      "end": "2002-10-09",
+      "buy_hold": {
+        "return": -0.4581565018755639,
+        "max_drawdown": -0.4727435766976348,
+        "avg_weight": 1.0
+      },
+      "trailing_vol_target": {
+        "return": -0.41310175176225206,
+        "max_drawdown": -0.42409109784325383,
+        "avg_weight": 0.7183919092632233
+      },
+      "model_vol_target": {
+        "return": -0.4283701316318429,
+        "max_drawdown": -0.4330306227834737,
+        "avg_weight": 0.7880649944980263
+      },
+      "model_vol_target_drop_filter": {
+        "return": -0.4283701316318429,
+        "max_drawdown": -0.4330306227834737,
+        "avg_weight": 0.7880649944980263
+      }
+    },
+    {
+      "crisis": "Financial crisis",
+      "start": "2007-10-09",
+      "end": "2009-03-09",
+      "buy_hold": {
+        "return": -0.5251831180591944,
+        "max_drawdown": -0.5514642587888614,
+        "avg_weight": 1.0
+      },
+      "trailing_vol_target": {
+        "return": -0.3213316553465356,
+        "max_drawdown": -0.3372094217303232,
+        "avg_weight": 0.6202106390841752
+      },
+      "model_vol_target": {
+        "return": -0.43084689768652507,
+        "max_drawdown": -0.4462632970075896,
+        "avg_weight": 0.6813509260996748
+      },
+      "model_vol_target_drop_filter": {
+        "return": -0.373231966625165,
+        "max_drawdown": -0.38154444758503847,
+        "avg_weight": 0.5959246228775608
+      }
+    },
+    {
+      "crisis": "2011 debt crisis",
+      "start": "2011-04-29",
+      "end": "2011-10-03",
+      "buy_hold": {
+        "return": -0.16821068217892698,
+        "max_drawdown": -0.18479999535695513,
+        "avg_weight": 1.0
+      },
+      "trailing_vol_target": {
+        "return": -0.14186995333506136,
+        "max_drawdown": -0.14931987458318674,
+        "avg_weight": 0.7657681681260976
+      },
+      "model_vol_target": {
+        "return": -0.1582231324400637,
+        "max_drawdown": -0.16459754455397113,
+        "avg_weight": 0.7984143884497328
+      },
+      "model_vol_target_drop_filter": {
+        "return": -0.1576651367479711,
+        "max_drawdown": -0.16055707915690098,
+        "avg_weight": 0.7892565394221435
+      }
+    },
+    {
+      "crisis": "2015-16 sell-off",
+      "start": "2015-05-21",
+      "end": "2016-02-11",
+      "buy_hold": {
+        "return": -0.11178096211747568,
+        "max_drawdown": -0.13022928023238278,
+        "avg_weight": 1.0
+      },
+      "trailing_vol_target": {
+        "return": -0.11656336706286896,
+        "max_drawdown": -0.12852068592852772,
+        "avg_weight": 0.8759190438487039
+      },
+      "model_vol_target": {
+        "return": -0.1303165405645793,
+        "max_drawdown": -0.14242392976244023,
+        "avg_weight": 0.8859905663759073
+      },
+      "model_vol_target_drop_filter": {
+        "return": -0.1303165405645793,
+        "max_drawdown": -0.14242392976244023,
+        "avg_weight": 0.8859905663759073
+      }
+    },
+    {
+      "crisis": "2018 Q4",
+      "start": "2018-09-20",
+      "end": "2018-12-24",
+      "buy_hold": {
+        "return": -0.1527401337811538,
+        "max_drawdown": -0.19275138298842365,
+        "avg_weight": 1.0
+      },
+      "trailing_vol_target": {
+        "return": -0.11985640500270911,
+        "max_drawdown": -0.1475426215556882,
+        "avg_weight": 0.7719416331175561
+      },
+      "model_vol_target": {
+        "return": -0.1451668133296009,
+        "max_drawdown": -0.16845420217145368,
+        "avg_weight": 0.8506794019611407
+      },
+      "model_vol_target_drop_filter": {
+        "return": -0.1517277844104883,
+        "max_drawdown": -0.16150292301860758,
+        "avg_weight": 0.8408660836221619
+      }
+    },
+    {
+      "crisis": "COVID crash",
+      "start": "2020-02-19",
+      "end": "2020-03-23",
+      "buy_hold": {
+        "return": -0.27711843970076366,
+        "max_drawdown": -0.33443830547055076,
+        "avg_weight": 1.0
+      },
+      "trailing_vol_target": {
+        "return": -0.15882767732698966,
+        "max_drawdown": -0.17165145586695285,
+        "avg_weight": 0.4999704909305507
+      },
+      "model_vol_target": {
+        "return": -0.18021524741523076,
+        "max_drawdown": -0.20100199214038372,
+        "avg_weight": 0.5584536319253925
+      },
+      "model_vol_target_drop_filter": {
+        "return": -0.1663617975318029,
+        "max_drawdown": -0.17542661994815956,
+        "avg_weight": 0.482151114237985
+      }
+    },
+    {
+      "crisis": "2022 bear market",
+      "start": "2022-01-03",
+      "end": "2022-10-12",
+      "buy_hold": {
+        "return": -0.22503765240648665,
+        "max_drawdown": -0.24471091380776377,
+        "avg_weight": 1.0
+      },
+      "trailing_vol_target": {
+        "return": -0.17629459200113895,
+        "max_drawdown": -0.18883468212058285,
+        "avg_weight": 0.680808031747225
+      },
+      "model_vol_target": {
+        "return": -0.18914838543333523,
+        "max_drawdown": -0.2005459125666461,
+        "avg_weight": 0.7178496399436953
+      },
+      "model_vol_target_drop_filter": {
+        "return": -0.20536069757418784,
+        "max_drawdown": -0.2165303405124135,
+        "avg_weight": 0.6944755315411004
+      }
+    }
+  ],
+  "regime": {
+    "start": "1997-05-29",
+    "end": "2026-10-05",
+    "years": 29.2,
+    "outcomes": {
+      "calm": {
+        "share_of_days": 0.38185768604019554,
+        "next_20d_vol": 0.10962538036472592,
+        "next_20d_return": 0.005667446413125407,
+        "next_20d_drop_rate": 0.08570412517780938
+      },
+      "normal": {
+        "share_of_days": 0.45640956002172733,
+        "next_20d_vol": 0.17030514284947823,
+        "next_20d_return": 0.00815133791140435,
+        "next_20d_drop_rate": 0.2097590002975305
+      },
+      "stressed": {
+        "share_of_days": 0.16173275393807712,
+        "next_20d_vol": 0.2799516844392109,
+        "next_20d_return": 0.015168776626970833,
+        "next_20d_drop_rate": 0.32829554995801846
+      }
+    },
+    "stressed_spells": 128,
+    "outcomes_before_2010": {
+      "calm": {
+        "share_of_days": 0.2526813880126183,
+        "next_20d_vol": 0.10398050386116976,
+        "next_20d_return": 0.005103575594362957,
+        "next_20d_drop_rate": 0.05118601747815231
+      },
+      "normal": {
+        "share_of_days": 0.5028391167192429,
+        "next_20d_vol": 0.1862045603617397,
+        "next_20d_return": 0.002844749584074046,
+        "next_20d_drop_rate": 0.2578419071518193
+      },
+      "stressed": {
+        "share_of_days": 0.2444794952681388,
+        "next_20d_vol": 0.28663142727541124,
+        "next_20d_return": 0.006173837128841139,
+        "next_20d_drop_rate": 0.35096774193548386
+      }
+    }
+  }
+}
