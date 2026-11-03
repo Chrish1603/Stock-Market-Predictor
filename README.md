@@ -1,28 +1,24 @@
 # Stock Market Predictor
 
-**Forecasting stock market risk with machine learning, tested like research and run like a product.**
-
 [![pipeline](https://github.com/Chrish1603/Stock-Market-Predictor/actions/workflows/pipeline.yml/badge.svg)](https://github.com/Chrish1603/Stock-Market-Predictor/actions/workflows/pipeline.yml)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-2a78d6)
 ![tests](https://img.shields.io/badge/tests-pytest-2a78d6)
 [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://chrish-patel-stock-market-predictor.streamlit.app/)
 
-**[Live dashboard →](https://chrish-patel-stock-market-predictor.streamlit.app/)** (updates itself after every US trading day)
+An end-to-end machine-learning system for US stocks: it downloads and cleans market data, builds features without
+lookahead, trains and compares models with walk-forward testing, turns the forecasts into position sizes, and
+runs itself every trading day with a public dashboard and track record.
+
+It started as an attempt to predict whether stocks go up or down. Rigorous testing showed that was close to a coin
+flip, so the project shifted to what *is* forecastable: **risk**. It now forecasts each stock's volatility and
+chance of a 5% drop, labels the market calm, normal or stressed, and sizes positions to keep risk steady.
+
+**[Open the live dashboard →](https://chrish-patel-stock-market-predictor.streamlit.app/)** (updated each US trading day)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/today-dark.png">
   <img alt="Dashboard: market regime and per-stock risk cards" src="docs/images/today-light.png">
 </picture>
-
-## Overview
-
-I set out to predict whether US stocks would go up or down. After building a leak-free evaluation framework and
-testing many models and inputs, the honest answer was: barely better than a coin flip. So I pivoted to what the
-data *can* forecast, **risk**, and built a complete system around it.
-
-Every trading day it downloads market data, forecasts each stock's volatility and chance of a 5% drop, labels the
-market calm, normal or stressed, and suggests a position size that keeps risk steady. GitHub Actions runs it
-automatically, publishes the results to a public dashboard, and scores every forecast once the outcome is known.
 
 > Educational project, not financial advice.
 
