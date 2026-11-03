@@ -98,6 +98,7 @@ except Exception as exc:  # network or GitHub problem: explain instead of showin
     st.stop()
 CFG = load_config()
 
+
 # --- colours: validated reference palette, stepped separately for light and dark -------------
 PALETTES = {
     "light": dict(
@@ -113,6 +114,9 @@ PALETTES = {
         ink2="#52514e",
         actual="#52514e",  # "what happened" lines
         surface="#fcfcfb",
+        card="rgba(255,255,255,0.72)",
+        fill_top="rgba(42,120,214,0.22)",
+        fill_top2="rgba(235,104,52,0.20)",
         band="rgba(42,120,214,0.10)",
         band_key="rgba(42,120,214,0.35)",  # the band's wash, strong enough to read as a legend key
         band2="rgba(235,104,52,0.10)",
@@ -132,23 +136,26 @@ PALETTES = {
         s3="#199e70",
         up="#3987e5",
         down="#e66767",
-        muted="#898781",
-        grid="#2c2c2a",
-        axis="#383835",
-        ink="#f0efec",
-        ink2="#c3c2b7",
-        actual="#a3a29b",  # dimmer than text ink, so it doesn't outshine the forecast
-        surface="#1a1a19",
-        band="rgba(57,135,229,0.15)",
+        muted="#8b919c",
+        grid="#222730",
+        axis="#353b45",
+        ink="#eceef1",
+        ink2="#c3c8d0",
+        actual="#9aa1ac",  # dimmer than text ink, so it doesn't outshine the forecast
+        surface="#0f1216",
+        card="rgba(255,255,255,0.028)",
+        fill_top="rgba(57,135,229,0.30)",  # top of fading area fills
+        fill_top2="rgba(217,89,38,0.26)",
+        band="rgba(57,135,229,0.16)",
         band_key="rgba(57,135,229,0.45)",
         band2="rgba(217,89,38,0.16)",
         page_bg=(
-            "radial-gradient(1100px 520px at 88% -8%, rgba(57,135,229,0.20), transparent 70%), "
-            "radial-gradient(900px 480px at 8% -12%, rgba(25,158,112,0.10), transparent 70%), "
-            "linear-gradient(180deg, #171a20 0%, #151617 380px, #141413 900px)"
+            "radial-gradient(1100px 540px at 85% -10%, rgba(57,135,229,0.14), transparent 70%), "
+            "linear-gradient(180deg, #121720 0%, #10141a 420px, #0f1216 900px)"
         ),
-        calm_wash="rgba(12,163,12,0.16)",
-        stressed_wash="rgba(208,59,59,0.24)",
+        # on a dark page, green washes read as murky, so calm is kept very faint
+        calm_wash="rgba(25,158,112,0.07)",
+        stressed_wash="rgba(230,103,103,0.16)",
         seq=["#104281", "#256abf", "#5598e7", "#b7d3f6"],
     ),
 }
@@ -168,6 +175,7 @@ st.markdown(
       .block-container {{ padding-top: 2rem; padding-bottom: 3rem; max-width: 1280px; }}
       [data-testid="stHeader"] {{ background: transparent; }}
       [data-testid="stApp"] {{ background: {C["page_bg"]}; background-attachment: fixed; }}
+      [class*="st-key-card-"] {{ background: {C["card"]}; }}
       h1, h2, h3 {{ letter-spacing: -0.015em; }}
       .stTabs [data-baseweb="tab-list"] {{ gap: 1.6rem; }}
       .stTabs [data-baseweb="tab"] {{ font-size: 0.95rem; padding-left: 0; padding-right: 0; }}
@@ -345,6 +353,13 @@ def style(fig: go.Figure, height: int = 420) -> go.Figure:
         title_font=dict(color=C["muted"], size=12),
     )
     return fig
+
+
+def fade(rgba: str, start: float | None = None, stop: float | None = None, deep_at_bottom: bool = False) -> dict:
+    """A fill that fades to transparent, instead of a flat block (flat fills turn into slabs on dark pages)."""
+    clear = re.sub(r"[\d.]+\)$", "0)", rgba)
+    scale = [(0, rgba), (1, clear)] if deep_at_bottom else [(0, clear), (1, rgba)]
+    return dict(type="vertical", colorscale=scale, start=start, stop=stop)
 
 
 def key(color: str, label: str, mark: str = "line") -> str:
@@ -558,7 +573,7 @@ def sparkline(series: pd.Series) -> go.Figure:
             mode="lines",
             line=dict(color=C["s1"], width=2, shape="spline", smoothing=0.4),
             fill="tozeroy",
-            fillcolor=C["band"],
+            fillgradient=fade(C["fill_top"], start=lo - pad, stop=hi),
             hovertemplate="%{x|%d %b}: %{y:,.2f}<extra></extra>",
         )
     )
@@ -699,7 +714,7 @@ with tab_today:
                     f"weak signal, score {auc:.2f} where 0.50 is a coin flip"
                 )
 
-            with grid[i % 2].container(border=True, height="stretch"):
+            with grid[i % 2].container(border=True, height="stretch", key=f"card-{t}"):
                 st.markdown(
                     f"<div class='card-head'><div><span class='ticker'>{t}</span>"
                     f"<span class='price'>{close.iloc[-1]:,.2f}</span></div>"
@@ -900,7 +915,7 @@ with tab_risk:
                         name=STRATEGY_LABELS[s],
                         line=dict(color=color, width=1.25 if wash else width),
                         fill="tozeroy" if wash else None,
-                        fillcolor=C["band2"] if wash else None,
+                        fillgradient=fade(C["fill_top2"], deep_at_bottom=True) if wash else None,
                         hovertemplate="%{y:.1%}",
                     )
                 )
@@ -932,7 +947,7 @@ with tab_risk:
                         name="Invested",
                         line=dict(color=OURS, width=1.5),
                         fill="tozeroy",
-                        fillcolor=C["band"],
+                        fillgradient=fade(C["fill_top"], start=0, stop=1),
                         hovertemplate="%{y:.0%} invested",
                     )
                 )
@@ -1199,7 +1214,7 @@ with tab_track:
                 else ""
             )
             st.info(
-                f"{ticker}: {len(rt)} {horizon_label(risk_track_h)} forecast{'s' if len(rt) != 1 else ''} recorded, "
+                f"{ticker}: {len(rt)} {risk_track_h}-day forecast{'s' if len(rt) != 1 else ''} recorded, "
                 f"{len(rscored)} scored so far.{first_due} The chart appears once a few have been scored."
             )
         else:
@@ -1785,7 +1800,7 @@ with tab_bt:
                     name=name,
                     line=dict(color=color, width=1.25 if wash else 2),
                     fill="tozeroy" if wash else None,
-                    fillcolor=C["band2"] if wash else None,
+                    fillgradient=fade(C["fill_top2"], deep_at_bottom=True) if wash else None,
                     hovertemplate="%{y:.1%}",
                 )
             )

@@ -26,16 +26,18 @@ dataframeHeaderBackgroundColor = "#f3f2ee"
 [theme.light.sidebar]
 backgroundColor = "#f6f5f1"
 
+# Dark uses cool blue-grey neutrals rather than warm ones, so the blue accent and charts sit in the
+# same colour family (warm near-black under blue read as muddy).
 [theme.dark]
 primaryColor = "#3987e5"
-backgroundColor = "#141413"
-secondaryBackgroundColor = "#1f1f1d"
-textColor = "#f0efec"
-borderColor = "#2e2e2b"
-dataframeHeaderBackgroundColor = "#1f1f1d"
+backgroundColor = "#0f1216"
+secondaryBackgroundColor = "#181c22"
+textColor = "#eceef1"
+borderColor = "#262b33"
+dataframeHeaderBackgroundColor = "#181c22"
 
 [theme.dark.sidebar]
-backgroundColor = "#1a1a19"
+backgroundColor = "#12151a"
 
 [client]
 toolbarMode = "minimal"   # hide the Deploy button
