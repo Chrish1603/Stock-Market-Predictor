@@ -199,7 +199,7 @@ def train_pooled(cfg: Config, horizon: int, panel: pd.DataFrame | None = None) -
             "scope": "pooled",
             "n_training_tickers": int(data["ticker"].nunique()),
             "features": cols,
-            "n_rows": int(len(th)),
+            "n_rows": len(th),
             "dev_period": [str(pd.Timestamp(dev["Date"].min()).date()), str(pd.Timestamp(dev["Date"].max()).date())],
             "holdout_period": [
                 str(pd.Timestamp(hold["Date"].min()).date()),

@@ -211,7 +211,7 @@ def build_report(spec: dict, cfgs: dict[str, Config]) -> dict:
     if spec["kind"] in ("direction", "risk"):
         scores = {n: fold_scores(c, spec) for n, c in cfgs.items()}
         for n, s in scores.items():
-            entry = {"mean": float(s["value"].mean()) if len(s) else float("nan"), "n": int(len(s))}
+            entry = {"mean": float(s["value"].mean()) if len(s) else float("nan"), "n": len(s)}
             if n != control:
                 entry |= _compare(s, scores[control])
             result["variants"][n] = entry
@@ -225,7 +225,7 @@ def build_report(spec: dict, cfgs: dict[str, Config]) -> dict:
         rets = {n: portfolio_returns(c, strategy) for n, c in cfgs.items()}
         for n, r in rets.items():
             eq = (1 + r).cumprod()
-            entry = {"mean": _sharpe(r), "max_drawdown": float((eq / eq.cummax() - 1).min()), "n": int(len(r))}
+            entry = {"mean": _sharpe(r), "max_drawdown": float((eq / eq.cummax() - 1).min()), "n": len(r)}
             if n != control:
                 entry |= _compare_sharpe(r, rets[control])
             result["variants"][n] = entry

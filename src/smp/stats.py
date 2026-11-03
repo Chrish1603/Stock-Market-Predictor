@@ -37,8 +37,8 @@ def cluster_bootstrap_mean(diffs: pd.Series, clusters: pd.Series, n_boot: int = 
         "ci_low": float(np.quantile(boot, ALPHA / 2)),
         "ci_high": float(np.quantile(boot, 1 - ALPHA / 2)),
         "p_value": float(min(1.0, max(p, 1 / n_boot))),
-        "n": int(len(df)),
-        "n_clusters": int(len(s)),
+        "n": len(df),
+        "n_clusters": len(s),
     }
 
 

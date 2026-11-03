@@ -189,7 +189,7 @@ def build_features(
         else:
             out[f"{key}_ret_1"] = np.log(mc / mc.shift(1))
             out[f"{key}_ret_5"] = np.log(mc / mc.shift(5))
-    if RATE_TICKERS <= set(rates):
+    if set(rates) >= RATE_TICKERS:
         curve = rates["tnx"] - rates["irx"]  # 10-year minus 3-month
         out["yield_curve_change_20"] = curve - curve.shift(20)
         out["yield_curve_inverted"] = (curve < 0).astype(float).where(curve.notna())
@@ -221,8 +221,7 @@ def build_features(
         out[target_logvol(h)] = 0.5 * np.log(fwd_sq * TRADING_DAYS / h)  # log annualised vol
         fwd_min = c.shift(-1).rolling(h).min().shift(-(h - 1))  # lowest close t+1 .. t+h
         out[target_drop(h)] = (fwd_min / c - 1 <= -drop_threshold).astype(float).where(fwd_min.notna())
-    out = out.replace([np.inf, -np.inf], np.nan)
-    return out
+    return out.replace([np.inf, -np.inf], np.nan)
 
 
 def feature_columns(df: pd.DataFrame) -> list[str]:

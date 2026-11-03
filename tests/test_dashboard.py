@@ -9,12 +9,15 @@ APP = "../app/dashboard.py"
 
 @pytest.fixture(autouse=True)
 def keep_smp_modules():
-    """The dashboard may reload smp modules; put the originals back so later tests share one copy."""
+    """The dashboard may reload this project's modules; put the originals back so later tests share one copy."""
     import sys
 
-    saved = {k: v for k, v in sys.modules.items() if k == "smp" or k.startswith("smp.")}
+    def own(name: str) -> bool:
+        return name.split(".")[0] in ("smp", "smp_dashboard")
+
+    saved = {k: v for k, v in sys.modules.items() if own(k)}
     yield
-    for k in [k for k in sys.modules if k == "smp" or k.startswith("smp.")]:
+    for k in [k for k in sys.modules if own(k)]:
         del sys.modules[k]
     sys.modules.update(saved)
 
@@ -122,10 +125,10 @@ def test_page_colours_follow_the_live_theme():
     """Viewers can switch light/dark without the script rerunning, so page-level colours must be chosen by
     the browser (CSS light-dark()), not picked in Python from the theme seen at the last run."""
     import re
-    from pathlib import Path
 
-    src = (Path(__file__).parents[1] / "app" / "dashboard.py").read_text()
-    for selector in ('[data-testid="stApp"]', '[class*="st-key-card-"]'):
-        rule = re.search(re.escape(selector) + r" \{\{(.*?)\}\}", src, re.S)
+    from smp_dashboard.theme import CSS
+
+    for selector in ('[data-testid="stApp"]', '[class*="st-key-card-"]', ".bar > span"):
+        rule = re.search(re.escape(selector) + r" \{(.*?)\}", CSS, re.S)
         assert rule, selector
-        assert "light-dark(" in rule.group(1) and "C[" not in rule.group(1), selector
+        assert "light-dark(" in rule.group(1), selector

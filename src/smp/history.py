@@ -66,9 +66,8 @@ def save_record(p, b, hist: pd.DataFrame) -> None:
     """Write a record safely: never drop existing predictions, keep the previous file as backup `b`."""
     if p.exists() or b.exists():
         old = load_record(p, b)
-        if len(old):
-            if missing := record_keys(old) - record_keys(hist):
-                raise HistoryError(f"refusing to save: {len(missing)} recorded prediction(s) would be lost")
+        if len(old) and (missing := record_keys(old) - record_keys(hist)):
+            raise HistoryError(f"refusing to save: {len(missing)} recorded prediction(s) would be lost")
         if p.exists():
             shutil.copy2(p, b)
     atomic_write_parquet(hist.sort_values(KEY).reset_index(drop=True), p, index=False)

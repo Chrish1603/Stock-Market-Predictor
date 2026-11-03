@@ -98,7 +98,7 @@ def test_summary_leads_with_problems():
     from smp.notify import render
 
     now = {"as_of": "2026-01-02", "regime": "normal", "market_vol": 0.12, "stocks": []}
-    title, text, md = render(now, [], ["stage 'ingest' failed: timeout"])
+    title, _, md = render(now, [], ["stage 'ingest' failed: timeout"])
     assert title.startswith("⚠ 1 problem: stage 'ingest' failed")
     assert md.index("**Problems:**") < md.index("S&P 500")
 
@@ -128,7 +128,7 @@ def test_publish_refuses_to_lose_published_predictions(tmp_path):
     with pytest.raises(SnapshotError, match="lose 2 of 2 published prediction"):
         check_records_kept(cfg, previous)  # a run that started a fresh record
     save_history(cfg, _rec("2026-01-05", "2026-01-06"))
-    with pytest.raises(SnapshotError, match="lose 1 of 2 published prediction.*from 2026-01-02"):
+    with pytest.raises(SnapshotError, match=r"lose 1 of 2 published prediction.*from 2026-01-02"):
         check_records_kept(cfg, previous)
     history_path(cfg).unlink()
     save_history(cfg, _rec("2026-01-02", "2026-01-05", "2026-01-06"))

@@ -47,7 +47,7 @@ def range_coverage(pred_logvol: pd.Series, close: pd.Series, horizon: int) -> di
     return {
         "typical": float((df["move"].abs() <= Z_TYPICAL * s).mean()),
         "wide": float((df["move"].abs() <= Z_WIDE * s).mean()),
-        "n": int(len(df)),
+        "n": len(df),
     }
 
 

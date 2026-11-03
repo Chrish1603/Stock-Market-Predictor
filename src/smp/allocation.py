@@ -110,7 +110,7 @@ def backtest_ticker(cfg: Config, ticker: str) -> tuple[pd.DataFrame, dict]:
     daily = daily.loc[fc.index[0] :].dropna()
     fc = fc.reindex(daily.index).ffill()  # carry forecasts over the short purge gap before the hold-out
     runs = {name: run_weights(daily, w, cfg.backtest.cost) for name, w in strategy_weights(cfg, fc).items()}
-    curves = pd.concat({n: r for n, r in runs.items()}, axis=1)
+    curves = pd.concat(runs, axis=1)
     curves.columns = [f"{n}_{c}" for n, c in curves.columns]
     stats = {n: performance(r) for n, r in runs.items()}
     return curves, stats

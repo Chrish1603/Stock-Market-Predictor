@@ -31,10 +31,8 @@ def test_atomic_parquet_round_trip(tmp_path):
 
 
 def test_run_lock_blocks_overlapping_runs(tmp_path):
-    with run_lock(tmp_path):
-        with pytest.raises(PipelineBusy, match=str(os.getpid())):
-            with run_lock(tmp_path):
-                pass
+    with run_lock(tmp_path), pytest.raises(PipelineBusy, match=str(os.getpid())), run_lock(tmp_path):
+        pass
     with run_lock(tmp_path):  # released afterwards
         pass
 

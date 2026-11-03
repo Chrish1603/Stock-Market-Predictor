@@ -23,7 +23,7 @@ def clean_ohlcv(df: pd.DataFrame, ffill_limit: int = 2, outlier_z: float = 6.0) 
     if missing:
         raise ValueError(f"missing columns: {sorted(missing)}")
 
-    report: dict = {"rows_in": int(len(df))}
+    report: dict = {"rows_in": len(df)}
     df = df[OHLCV].copy()
 
     # Schema: naive datetime index, sorted, unique, numeric floats.
@@ -65,7 +65,7 @@ def clean_ohlcv(df: pd.DataFrame, ffill_limit: int = 2, outlier_z: float = 6.0) 
     report["large_gaps"] = [
         {"date": d.strftime("%Y-%m-%d"), "days": int(g)} for d, g in gaps[gaps > LARGE_GAP_DAYS].items()
     ]
-    report["rows_out"] = int(len(df))
+    report["rows_out"] = len(df)
     report["start"] = df.index.min().strftime("%Y-%m-%d") if len(df) else None
     report["end"] = df.index.max().strftime("%Y-%m-%d") if len(df) else None
     return df, report
