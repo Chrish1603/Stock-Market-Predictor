@@ -106,7 +106,16 @@ PALETTES = {
         down="#e34948",
         muted="#898781",
         grid="#e1e0d9",
+        axis="#c3c2b7",
+        ink="#0b0b0b",
+        ink2="#52514e",
+        actual="#52514e",  # "what happened" lines
+        surface="#fcfcfb",
         band="rgba(42,120,214,0.10)",
+        band_key="rgba(42,120,214,0.35)",  # the band's wash, strong enough to read as a legend key
+        band2="rgba(235,104,52,0.10)",
+        calm_wash="rgba(12,163,12,0.10)",
+        stressed_wash="rgba(208,59,59,0.16)",
         seq=["#cde2fb", "#86b6ef", "#2a78d6", "#184f95"],
     ),
     "dark": dict(
@@ -117,12 +126,25 @@ PALETTES = {
         down="#e66767",
         muted="#898781",
         grid="#2c2c2a",
+        axis="#383835",
+        ink="#f0efec",
+        ink2="#c3c2b7",
+        actual="#a3a29b",  # dimmer than text ink, so it doesn't outshine the forecast
+        surface="#1a1a19",
         band="rgba(57,135,229,0.15)",
+        band_key="rgba(57,135,229,0.45)",
+        band2="rgba(217,89,38,0.16)",
+        calm_wash="rgba(12,163,12,0.16)",
+        stressed_wash="rgba(208,59,59,0.24)",
         seq=["#104281", "#256abf", "#5598e7", "#b7d3f6"],
     ),
 }
 theme_type = getattr(getattr(st.context, "theme", None), "type", None) or "light"
 C = PALETTES["dark" if theme_type == "dark" else "light"]
+# Colour roles, the same in every chart: blue = what this project built (a forecast, the strategy),
+# orange = the simple alternative it's compared with (last month's vol, buy & hold, always "up"),
+# grey ink = what actually happened. Aqua is a second variant of our own (sizing on the model forecast).
+OURS, ALT, OURS2, ACTUAL = C["s1"], C["s2"], C["s3"], C["actual"]
 FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
 UP_TEXT, DOWN_TEXT = ("#0ca30c", "#e66767") if theme_type == "dark" else ("#006300", "#c03030")
 
@@ -251,21 +273,70 @@ def as_text(df: pd.DataFrame, formats: dict[str, str]) -> pd.DataFrame:
 
 
 def style(fig: go.Figure, height: int = 420) -> go.Figure:
-    """House style: transparent background, left-aligned title, hairline grid, legend below."""
+    """House style: transparent background, left-aligned title with the legend right under it, hairline grid,
+    solid crosshair, tooltips on the chart surface, 4px rounded bar ends."""
+    has_title = bool(fig.layout.title.text)
+    named = [t for t in fig.data if t.name and t.showlegend is not False]
+    legend = fig.layout.showlegend is not False and len(named) >= 2  # one series: the title names it
     fig.update_layout(
         height=height,
-        margin=dict(l=8, r=8, t=52, b=8),
-        font=dict(family=FONT, size=12),
-        title=dict(x=0, xanchor="left", y=0.98, yanchor="top", font=dict(size=15, family=FONT)),
+        margin=dict(l=4, r=12, t=(34 if has_title else 10) + (26 if legend else 0), b=4),
+        font=dict(family=FONT, size=12, color=C["ink2"]),
+        title=dict(
+            x=0,
+            xref="paper",
+            xanchor="left",
+            y=1,
+            yref="paper",
+            yanchor="bottom",
+            pad=dict(b=34 if legend else 12),
+            font=dict(size=15, family=FONT, color=C["ink"]),
+        ),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        hovermode="x unified",
-        hoverlabel=dict(font=dict(family=FONT, size=12)),
-        legend=dict(orientation="h", y=-0.1, yanchor="top", x=0, font=dict(size=12)),
+        hovermode=fig.layout.hovermode or "x unified",
+        hoverlabel=dict(bgcolor=C["surface"], bordercolor=C["grid"], font=dict(family=FONT, size=12, color=C["ink"])),
+        showlegend=legend,
+        legend=dict(
+            orientation="h",
+            x=0,
+            xanchor="left",
+            y=1,
+            yanchor="bottom",
+            font=dict(size=12),
+            itemwidth=30,
+            title=None,
+        ),
+        barcornerradius=4,
     )
-    fig.update_xaxes(showgrid=False, linecolor=C["grid"], tickfont=dict(color=C["muted"]), ticks="")
-    fig.update_yaxes(gridcolor=C["grid"], gridwidth=1, zeroline=False, tickfont=dict(color=C["muted"]))
+    fig.update_xaxes(
+        showgrid=False,
+        showline=True,
+        linecolor=C["axis"],
+        tickfont=dict(color=C["muted"]),
+        title_font=dict(color=C["muted"], size=12),
+        ticks="",
+        showspikes=True,
+        spikemode="across",
+        spikesnap="cursor",
+        spikethickness=1,
+        spikecolor=C["axis"],
+        spikedash="solid",
+    )
+    fig.update_yaxes(
+        gridcolor=C["grid"],
+        gridwidth=1,
+        zeroline=False,
+        tickfont=dict(color=C["muted"]),
+        title_font=dict(color=C["muted"], size=12),
+    )
     return fig
+
+
+def key(color: str, label: str, mark: str = "line") -> str:
+    """An inline legend key: a coloured mark beside label text (text stays in ink colours)."""
+    glyph = {"line": "━", "area": "■", "dot": "●"}[mark]
+    return f"<span style='color:{color}'>{glyph}</span> {label}"
 
 
 def show(fig: go.Figure) -> None:
@@ -539,7 +610,7 @@ with tab_today:
                     f"weak signal, score {auc:.2f} where 0.50 is a coin flip"
                 )
 
-            with grid[i % 2].container(border=True):
+            with grid[i % 2].container(border=True, height="stretch"):
                 st.markdown(
                     f"<div class='card-head'><div><span class='ticker'>{t}</span>"
                     f"<span class='price'>{close.iloc[-1]:,.2f}</span></div>"
@@ -647,12 +718,18 @@ with tab_risk:
             vm = rmeta["vol"]
             fig = go.Figure()
             for col, name, color, width in (
-                ("actual_logvol", "Realised (what happened)", C["muted"], 1),
-                ("trailing_logvol", "Last month's vol", C["s2"], 2),
-                ("pred_logvol", f"Forecast ({vm['selected']})", C["s1"], 2),
+                ("actual_logvol", "What happened", ACTUAL, 1.25),
+                ("trailing_logvol", "Last month's vol", ALT, 1.75),
+                ("pred_logvol", f"Forecast ({vm['selected']})", OURS, 2),
             ):
                 fig.add_trace(
-                    go.Scatter(x=oos.index, y=np.exp(oos[col]), name=name, line=dict(color=color, width=width))
+                    go.Scatter(
+                        x=oos.index,
+                        y=np.exp(oos[col]),
+                        name=name,
+                        line=dict(color=color, width=width),
+                        hovertemplate="%{y:.0%}",
+                    )
                 )
             fig.update_layout(title=f"{ticker}: {rh}-day volatility forecast vs what happened (out of sample)")
             fig.update_yaxes(tickformat=".0%")
@@ -660,7 +737,7 @@ with tab_risk:
             sel = vm["selected"]
             st.caption(
                 "Last month's volatility (orange) reacts late: it stays high after turbulence ends and low as it "
-                "starts. The forecast (blue) adjusts sooner. "
+                "starts. The forecast (blue) adjusts sooner. Grey is what volatility turned out to be. "
                 f"Walk-forward CV R² on log volatility: forecast {vm['cv'][sel]['r2']:.2f}, HAR "
                 f"{vm['cv']['har']['r2']:.2f}, last month's vol {vm['cv']['persistence']['r2']:.2f}. "
                 f"Average error {vm['cv'][sel]['mae_vol_points']:.1%} points."
@@ -678,12 +755,31 @@ with tab_risk:
         else:
             eq = go.Figure()
             dd = go.Figure()
-            for s, color in zip(SHOWN_STRATEGIES, (C["s2"], C["s1"], C["s3"]), strict=True):
-                e = curves[f"{s}_equity"]
-                eq.add_trace(go.Scatter(x=e.index, y=e, name=STRATEGY_LABELS[s], line=dict(color=color, width=2)))
+            live = "model_vol_target" if rc.sizing_vol == "model" else "trailing_vol_target"
+            colors = {"buy_hold": ALT, live: OURS}
+            for s in SHOWN_STRATEGIES:
+                e, color = curves[f"{s}_equity"], colors.get(s, OURS2)
+                width = 2 if s in colors else 1.5
+                eq.add_trace(
+                    go.Scatter(
+                        x=e.index,
+                        y=e,
+                        name=STRATEGY_LABELS[s],
+                        line=dict(color=color, width=width),
+                        hovertemplate="$%{y:,.2f}",
+                    )
+                )
+                # buy & hold's drawdowns as a light wash, so the strategies' lines read on top of it
+                wash = s == "buy_hold"
                 dd.add_trace(
                     go.Scatter(
-                        x=e.index, y=e / e.cummax() - 1, name=STRATEGY_LABELS[s], line=dict(color=color, width=2)
+                        x=e.index,
+                        y=e / e.cummax() - 1,
+                        name=STRATEGY_LABELS[s],
+                        line=dict(color=color, width=1.25 if wash else width),
+                        fill="tozeroy" if wash else None,
+                        fillcolor=C["band2"] if wash else None,
+                        hovertemplate="%{y:.1%}",
                     )
                 )
             eq.update_layout(title="Growth of $1 (log scale)")
@@ -725,32 +821,60 @@ with tab_risk:
             st.subheader("Regime history (out of sample)")
             h = rhist.dropna(subset=["regime"])
             px_m = mkt_prices["Close"].reindex(h.index)
-            fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.85, 0.15], vertical_spacing=0.03)
+            fig = go.Figure()
+            # Calm and stressed spells as light washes behind the price; normal days stay unshaded
+            washes = {"calm": C["calm_wash"], "stressed": C["stressed_wash"]}
+            spell = (h["regime"] != h["regime"].shift()).cumsum()
+            shapes = []  # set all at once: add_vrect per spell takes ~12s for 250+ spells
+            for _, g in h.groupby(spell):
+                if (r := g["regime"].iloc[0]) in washes:
+                    end = h.index[min(h.index.get_loc(g.index[-1]) + 1, len(h) - 1)]
+                    shapes.append(
+                        dict(
+                            type="rect",
+                            xref="x",
+                            yref="paper",
+                            x0=g.index[0],
+                            x1=end,
+                            y0=0,
+                            y1=1,
+                            fillcolor=washes[r],
+                            line_width=0,
+                            layer="below",
+                        )
+                    )
+            fig.update_layout(shapes=shapes)
+            for r in ("calm", "normal", "stressed"):  # legend keys for the washes (icon + label)
+                _, icon, label = REGIME_STYLE[r]
+                fig.add_trace(
+                    go.Scatter(
+                        x=[None],
+                        y=[None],
+                        mode="markers",
+                        name=f"{icon} {label}" + (" (unshaded)" if r == "normal" else ""),
+                        marker=dict(
+                            symbol="square",
+                            size=12,
+                            color=washes.get(r, "rgba(0,0,0,0)"),
+                            line=dict(width=1, color=C["axis"]),
+                        ),
+                    )
+                )
             fig.add_trace(
-                go.Scatter(x=px_m.index, y=px_m, name=CFG.risk.market_ticker, line=dict(color=C["s1"], width=2)), 1, 1
+                go.Scatter(
+                    x=px_m.index,
+                    y=px_m,
+                    name=CFG.risk.market_ticker,
+                    line=dict(color=OURS, width=1.75),
+                    customdata=h["regime"].map(lambda r: f"{REGIME_STYLE[r][1]} {REGIME_STYLE[r][2]}"),
+                    hovertemplate="$%{y:,.0f} · %{customdata}<extra></extra>",
+                    showlegend=False,
+                )
             )
-            codes = h["regime"].map({r: i for i, r in enumerate(REGIME_STYLE)})
-            scale = [[i / 2, REGIME_STYLE[r][0]] for i, r in enumerate(REGIME_STYLE)]
-            fig.add_trace(
-                go.Heatmap(
-                    x=h.index,
-                    y=["Regime"],
-                    z=[codes.to_numpy()],
-                    text=[h["regime"].to_numpy()],
-                    colorscale=scale,
-                    zmin=0,
-                    zmax=2,
-                    showscale=False,
-                    hovertemplate="%{x|%d %b %Y}: %{text}<extra></extra>",
-                ),
-                2,
-                1,
-            )
-            fig.update_layout(
-                title=f"{CFG.risk.market_ticker} with each day's regime (green ● calm, grey ◐ normal, red ▲ stressed)",
-                showlegend=False,
-            )
-            show(style(fig, height=380))
+            fig.update_layout(title=f"{CFG.risk.market_ticker} and each day's market regime")
+            fig.update_xaxes(type="date")  # the empty legend-key traces would otherwise make it numeric
+            fig.update_yaxes(tickprefix="$")
+            show(style(fig, height=400))
             vt = pd.DataFrame(rval).T.reindex(list(REGIME_STYLE))
             vt.index = [f"{REGIME_STYLE[r][1]} {REGIME_STYLE[r][2]}" for r in vt.index]
             vt.columns = ["Share of days", "Next 20d volatility", "Next 20d return", "Chance of 5% drop in next 20d"]
@@ -844,14 +968,18 @@ with tab_track:
             )
         else:
             fig = go.Figure()
-            for col, name, color, dash in (
-                ("realised_vol", "What happened", C["s1"], None),
-                ("forecast_vol", "Forecast", C["s2"], None),
-                ("trailing_vol", "Last month's vol", C["muted"], "dot"),
+            for col, name, color, width in (
+                ("realised_vol", "What happened", ACTUAL, 1.5),
+                ("trailing_vol", "Last month's vol", ALT, 1.75),
+                ("forecast_vol", "Forecast", OURS, 2),
             ):
                 fig.add_trace(
                     go.Scatter(
-                        x=rscored["as_of"], y=rscored[col], name=name, line=dict(color=color, width=2, dash=dash)
+                        x=rscored["as_of"],
+                        y=rscored[col],
+                        name=name,
+                        line=dict(color=color, width=width),
+                        hovertemplate="%{y:.0%}",
                     )
                 )
             fig.update_layout(title=f"{ticker} volatility over the next {horizon_label(risk_track_h)}, by forecast day")
@@ -932,7 +1060,11 @@ with tab_track:
             fig = go.Figure()
             fig.add_trace(
                 go.Scatter(
-                    x=scored["as_of"], y=scored["correct"].cumsum() / n, name="Model", line=dict(color=C["s1"], width=2)
+                    x=scored["as_of"],
+                    y=scored["correct"].cumsum() / n,
+                    name="Model",
+                    line=dict(color=OURS, width=2),
+                    hovertemplate="%{y:.0%}",
                 )
             )
             fig.add_trace(
@@ -940,10 +1072,16 @@ with tab_track:
                     x=scored["as_of"],
                     y=scored["actual_direction"].cumsum() / n,
                     name="Always 'up'",
-                    line=dict(color=C["s2"], width=2),
+                    line=dict(color=ALT, width=2),
+                    hovertemplate="%{y:.0%}",
                 )
             )
-            fig.add_hline(y=0.5, line=dict(color=C["muted"], width=1, dash="dot"))
+            fig.add_hline(
+                y=0.5,
+                line=dict(color=C["axis"], width=1),
+                annotation=dict(text="coin flip", font=dict(color=C["muted"], size=11)),
+                annotation_position="bottom right",
+            )
             fig.update_layout(title=f"{ticker} cumulative hit rate")
             fig.update_yaxes(tickformat=".0%")
             show(style(fig, height=360))
@@ -976,14 +1114,24 @@ with tab_price:
     n = ranges[choice]
     px, ix = (prices.iloc[-n:], ind.iloc[-n:]) if n else (prices, ind)
 
+    # One figure so the crosshair runs through every panel; each panel's title carries its own legend keys.
     fig = make_subplots(
         rows=4,
         cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.07,
-        row_heights=[0.5, 0.14, 0.17, 0.19],
-        subplot_titles=(f"{ticker} price", "Volume", "RSI (14): above 70 stretched, below 30 washed out", "MACD"),
+        vertical_spacing=0.075,
+        row_heights=[0.5, 0.13, 0.17, 0.2],
+        subplot_titles=(
+            f"<b>{ticker}</b>   {key(C['up'], 'up day', 'area')}  {key(C['down'], 'down day', 'area')}  "
+            f"{key(C['s2'], '20-day average')}  {key(C['s3'], '50-day average')}  "
+            f"{key(C['band_key'], 'Bollinger band', 'area')}",
+            "<b>Volume</b>",
+            "<b>RSI (14)</b>   above 70 stretched, below 30 washed out",
+            f"<b>MACD</b>   {key(C['s1'], 'MACD')}  {key(C['s2'], 'signal')}  {key(C['muted'], 'difference', 'area')}",
+        ),
     )
+    for ann in fig.layout.annotations:  # panel titles: left-aligned, in ink
+        ann.update(x=0, xanchor="left", font=dict(size=13, color=C["ink2"], family=FONT))
     fig.add_trace(go.Scatter(x=ix.index, y=ix["upper"], line=dict(width=0), showlegend=False, hoverinfo="skip"), 1, 1)
     fig.add_trace(
         go.Scatter(
@@ -994,6 +1142,7 @@ with tab_price:
             fillcolor=C["band"],
             name="Bollinger band",
             hoverinfo="skip",
+            showlegend=False,
         ),
         1,
         1,
@@ -1008,35 +1157,59 @@ with tab_price:
             name=ticker,
             increasing=dict(line=dict(color=C["up"], width=1), fillcolor=C["up"]),
             decreasing=dict(line=dict(color=C["down"], width=1), fillcolor=C["down"]),
+            showlegend=False,
         ),
         1,
         1,
     )
-    fig.add_trace(go.Scatter(x=ix.index, y=ix["sma20"], name="SMA 20", line=dict(color=C["s2"], width=2)), 1, 1)
-    fig.add_trace(go.Scatter(x=ix.index, y=ix["sma50"], name="SMA 50", line=dict(color=C["s3"], width=2)), 1, 1)
-    vol_colors = np.where(px["Close"] >= px["Open"], C["up"], C["down"])
-    fig.add_trace(go.Bar(x=px.index, y=px["Volume"], marker_color=vol_colors, name="Volume", showlegend=False), 2, 1)
+    line = dict(width=1.75)
     fig.add_trace(
-        go.Scatter(x=ix.index, y=ix["rsi"], name="RSI", line=dict(color=C["s1"], width=2), showlegend=False), 3, 1
+        go.Scatter(x=ix.index, y=ix["sma20"], name="20-day avg", line=line | dict(color=C["s2"]), showlegend=False),
+        1,
+        1,
     )
-    for level in (30, 70):
-        fig.add_hline(y=level, line=dict(color=C["muted"], width=1, dash="dot"), row=3, col=1)
+    fig.add_trace(
+        go.Scatter(x=ix.index, y=ix["sma50"], name="50-day avg", line=line | dict(color=C["s3"]), showlegend=False),
+        1,
+        1,
+    )
+    vol_colors = np.where(px["Close"] >= px["Open"], C["up"], C["down"])
+    fig.add_trace(
+        go.Bar(
+            x=px.index, y=px["Volume"], marker=dict(color=vol_colors, opacity=0.55), name="Volume", showlegend=False
+        ),
+        2,
+        1,
+    )
+    fig.add_hrect(
+        y0=30, y1=70, fillcolor=C["band"], line_width=0, layer="below", row=3, col=1, exclude_empty_subplots=False
+    )
+    fig.add_trace(
+        go.Scatter(x=ix.index, y=ix["rsi"], name="RSI", line=dict(color=C["s1"], width=1.75), showlegend=False), 3, 1
+    )
     fig.add_trace(
         go.Bar(
             x=ix.index,
             y=ix["hist"],
-            marker_color=np.where(ix["hist"] >= 0, C["up"], C["down"]),
-            name="MACD histogram",
+            marker=dict(color=C["muted"], opacity=0.45),
+            name="Difference",
             showlegend=False,
         ),
         4,
         1,
     )
-    fig.add_trace(go.Scatter(x=ix.index, y=ix["macd"], name="MACD", line=dict(color=C["s1"], width=2)), 4, 1)
-    fig.add_trace(go.Scatter(x=ix.index, y=ix["signal"], name="Signal", line=dict(color=C["s2"], width=2)), 4, 1)
-    fig.update_layout(xaxis_rangeslider_visible=False)
-    fig.update_yaxes(range=[0, 100], row=3, col=1)
-    show(style(fig, height=820))
+    fig.add_trace(
+        go.Scatter(x=ix.index, y=ix["macd"], name="MACD", line=line | dict(color=C["s1"]), showlegend=False), 4, 1
+    )
+    fig.add_trace(
+        go.Scatter(x=ix.index, y=ix["signal"], name="Signal", line=line | dict(color=C["s2"]), showlegend=False), 4, 1
+    )
+    fig.update_layout(xaxis_rangeslider_visible=False, showlegend=False, bargap=0.25)
+    fig.update_yaxes(range=[0, 100], tickvals=[30, 50, 70], row=3, col=1)
+    fig.update_yaxes(tickformat="~s", row=2, col=1)
+    style(fig, height=860)
+    fig.update_layout(margin=dict(t=30))
+    show(fig)
     with st.expander("Data table"):
         st.dataframe(px.join(ix).sort_index(ascending=False).round(3), width="stretch")
 
@@ -1117,10 +1290,18 @@ with tab_model:
             y, p = hold["actual_direction"].astype(int), hold["p_up"]
             fpr, tpr, _ = roc_curve(y, p)
             roc = go.Figure()
+            roc.add_trace(go.Scatter(x=[0, 1], y=[0, 1], name="Chance", line=dict(color=C["axis"], width=1)))
             roc.add_trace(
-                go.Scatter(x=[0, 1], y=[0, 1], name="Chance", line=dict(color=C["muted"], width=1, dash="dot"))
+                go.Scatter(
+                    x=fpr,
+                    y=tpr,
+                    name=m["selected"],
+                    line=dict(color=OURS, width=2),
+                    fill="tonexty",
+                    fillcolor=C["band"],
+                    hovertemplate="false positives %{x:.0%}, true positives %{y:.0%}<extra></extra>",
+                )
             )
-            roc.add_trace(go.Scatter(x=fpr, y=tpr, name=m["selected"], line=dict(color=C["s1"], width=2)))
             roc.add_annotation(x=0.62, y=0.45, text="chance", showarrow=False, font=dict(color=C["muted"]))
             roc.update_layout(
                 showlegend=False,
@@ -1141,6 +1322,9 @@ with tab_model:
                     showscale=False,
                     text=cm,
                     texttemplate="%{text}",
+                    textfont=dict(size=15),
+                    xgap=2,
+                    ygap=2,
                     hovertemplate="%{y} · %{x}: %{z}<extra></extra>",
                 )
             )
@@ -1188,6 +1372,7 @@ with tab_model:
                     y=imp.index,
                     orientation="h",
                     marker_color=C["s1"],
+                    width=0.55,
                     hovertemplate="%{y}: %{x:.1%}<extra></extra>",
                 )
             )
@@ -1195,7 +1380,9 @@ with tab_model:
                 title=f"What the {m['selected']} model relies on most (share of importance)", hovermode="closest"
             )
             bar.update_xaxes(tickformat=".1%")
-            show(style(bar, height=480))
+            style(bar, height=480)
+            bar.update_layout(title_xref="container")  # start at the chart's edge, not after the long labels
+            show(bar)
 
 # --- backtest ----------------------------------------------------------------------------------
 
@@ -1239,19 +1426,40 @@ with tab_bt:
 
         eq = go.Figure()
         eq.add_trace(
-            go.Scatter(x=bt.index, y=bt["strategy_equity"], name="Strategy", line=dict(color=C["s1"], width=2))
+            go.Scatter(
+                x=bt.index,
+                y=bt["strategy_equity"],
+                name="Model strategy",
+                line=dict(color=OURS, width=2),
+                hovertemplate="$%{y:,.2f}",
+            )
         )
         eq.add_trace(
-            go.Scatter(x=bt.index, y=bt["buy_hold_equity"], name="Buy & hold", line=dict(color=C["s2"], width=2))
+            go.Scatter(
+                x=bt.index,
+                y=bt["buy_hold_equity"],
+                name="Buy & hold",
+                line=dict(color=ALT, width=2),
+                hovertemplate="$%{y:,.2f}",
+            )
         )
         eq.update_layout(title="Growth of $1")
         eq.update_yaxes(tickprefix="$")
         show(style(eq))
 
         dd = go.Figure()
-        for col, name, color in (("strategy_equity", "Strategy", C["s1"]), ("buy_hold_equity", "Buy & hold", C["s2"])):
+        for col, name, color in (("buy_hold_equity", "Buy & hold", ALT), ("strategy_equity", "Model strategy", OURS)):
+            wash = col == "buy_hold_equity"
             dd.add_trace(
-                go.Scatter(x=bt.index, y=bt[col] / bt[col].cummax() - 1, name=name, line=dict(color=color, width=2))
+                go.Scatter(
+                    x=bt.index,
+                    y=bt[col] / bt[col].cummax() - 1,
+                    name=name,
+                    line=dict(color=color, width=1.25 if wash else 2),
+                    fill="tozeroy" if wash else None,
+                    fillcolor=C["band2"] if wash else None,
+                    hovertemplate="%{y:.1%}",
+                )
             )
         dd.update_layout(title="Drawdown")
         dd.update_yaxes(tickformat=".0%")
