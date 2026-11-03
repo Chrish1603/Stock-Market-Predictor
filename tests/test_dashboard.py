@@ -86,3 +86,33 @@ def test_dashboard_reloads_outdated_smp_modules(monkeypatch):
     sys.modules.pop("smp.risk_history", None)
     at = _app()
     assert not at.exception, at.exception
+
+
+def test_new_snapshot_replaces_cached_prices(tmp_path, monkeypatch):
+    """The hosted app showed a new snapshot's forecasts beside the previous snapshot's prices, because
+    cached loaders are keyed by ticker. A new snapshot must clear them."""
+    import pandas as pd
+
+    from smp.config import data_root
+    from smp.publish import build_snapshot
+
+    cfg = load_config()
+    if not (cfg.paths.models / "risk_predictions.parquet").exists():
+        pytest.skip("run `smp run-all` first")
+    new, old = tmp_path / "new", tmp_path / "old"
+    build_snapshot(cfg, new, data_root())
+    build_snapshot(cfg, old, data_root())
+    first = cfg.data.tickers[0]
+    p = old / "data" / "processed" / "clean" / f"{first}.parquet"
+    pd.read_parquet(p).iloc[:-1].to_parquet(p)  # the older snapshot is a day behind
+
+    def as_of(at):
+        return next(m.value for m in at.sidebar.markdown if "Data as of" in m.value)
+
+    monkeypatch.setenv("SMP_DATA_ROOT", str(old))
+    at = _app()
+    before = as_of(at)
+    monkeypatch.setenv("SMP_DATA_ROOT", str(new))
+    at.run()
+    assert not at.exception, at.exception
+    assert as_of(at) != before

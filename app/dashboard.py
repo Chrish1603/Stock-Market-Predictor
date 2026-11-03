@@ -99,6 +99,24 @@ except Exception as exc:  # network or GitHub problem: explain instead of showin
 CFG = load_config()
 
 
+@st.cache_resource
+def _loaded_version() -> dict:
+    return {"version": None}
+
+
+def data_version() -> tuple:
+    """Changes when a new snapshot is downloaded or the pipeline writes new forecasts."""
+    p = risk_predictions_path(CFG)
+    return os.environ.get("SMP_DATA_ROOT"), p.stat().st_mtime if p.exists() else None
+
+
+# Cached loaders are keyed by ticker and horizon, not by file path, so drop them all when the data
+# changes. Otherwise a new snapshot's forecasts would show beside the previous snapshot's prices.
+_v = _loaded_version()
+if _v["version"] != (_now := data_version()):
+    st.cache_data.clear()
+    _v["version"] = _now
+
 # --- colours: validated reference palette, stepped separately for light and dark -------------
 PALETTES = {
     "light": dict(
