@@ -42,6 +42,13 @@ def _read(p) -> pd.DataFrame:
     return hist
 
 
+def record_keys(hist: pd.DataFrame) -> set[tuple]:
+    """The (ticker, horizon, day) of every prediction in a record."""
+    if hist.empty:
+        return set()
+    return set(zip(hist["ticker"], hist["horizon"].astype(int), pd.to_datetime(hist["as_of"]), strict=True))
+
+
 def load_record(p, b) -> pd.DataFrame:
     """A record file; falls back to its backup copy `b` if the main file `p` is unreadable."""
     if not p.exists() and not b.exists():
@@ -60,9 +67,7 @@ def save_record(p, b, hist: pd.DataFrame) -> None:
     if p.exists() or b.exists():
         old = load_record(p, b)
         if len(old):
-            old_keys = set(map(tuple, old[KEY].astype(str).to_numpy()))
-            new_keys = set(map(tuple, hist[KEY].astype(str).to_numpy())) if len(hist) else set()
-            if missing := old_keys - new_keys:
+            if missing := record_keys(old) - record_keys(hist):
                 raise HistoryError(f"refusing to save: {len(missing)} recorded prediction(s) would be lost")
         if p.exists():
             shutil.copy2(p, b)

@@ -142,14 +142,21 @@ def notify_cmd(config: Path | None = ConfigOpt):
 @app.command()
 def publish(
     out: Path = typer.Option(Path("site-data"), help="Folder to write the dashboard snapshot to."),
+    previous: Path | None = typer.Option(
+        None, help="The last published snapshot: refuse to publish if any of its predictions would be lost."
+    ),
     config: Path | None = ConfigOpt,
 ):
     """Write a small data snapshot that a hosted dashboard can read (SMP_DATA_ROOT=<out>)."""
     from smp.config import data_root
-    from smp.publish import build_snapshot
+    from smp.publish import SnapshotError, build_snapshot
 
     cfg = _cfg(config)
-    m = build_snapshot(cfg, out, data_root())
+    try:
+        m = build_snapshot(cfg, out, data_root(), previous)
+    except SnapshotError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from None
     typer.echo(f"Wrote {m['files']} files ({m['bytes'] / 1e6:.1f} MB), data as of {m['as_of']}, to {out}")
 
 

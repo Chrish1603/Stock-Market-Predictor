@@ -17,7 +17,7 @@ from pathlib import Path
 import pandas as pd
 
 from smp.config import Config, PathsConfig
-from smp.history import KEY, backup_path, history_path, load_record, save_record
+from smp.history import KEY, backup_path, history_path, load_record, record_keys, save_record
 from smp.risk_history import risk_backup_path, risk_history_path
 
 log = logging.getLogger(__name__)
@@ -39,8 +39,7 @@ def merge_official(local: pd.DataFrame, official: pd.DataFrame) -> tuple[pd.Data
         return official.reset_index(drop=True), {"adopted": len(official), "in_both": 0, "local_only": 0}
     official = official.assign(as_of=pd.to_datetime(official["as_of"]))
     local = local.assign(as_of=pd.to_datetime(local["as_of"]))
-    keys = lambda df: set(map(tuple, df[KEY].astype(str).to_numpy()))  # noqa: E731
-    o, loc = keys(official), keys(local)
+    o, loc = record_keys(official), record_keys(local)
     merged = pd.concat([official, local], ignore_index=True).drop_duplicates(subset=KEY, keep="first")
     return merged.reset_index(drop=True), {
         "adopted": len(o - loc),

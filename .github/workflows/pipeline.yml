@@ -58,28 +58,49 @@ jobs:
           fi
 
       - name: Restore track record from the last snapshot
+        # Starting a fresh record is only right before the first snapshot exists. If the branch exists but
+        # can't be fetched or has no record, stop here (GitHub emails the owner) rather than publish a
+        # record that lost its history.
+        id: restore
         if: steps.check.outputs.skip != 'true'
         run: |
-          if git fetch --depth 1 origin dashboard-data 2>/dev/null; then
-            mkdir -p data
-            git archive FETCH_HEAD data/history | tar -x -C . || true
-            ls -la data/history || true
-          else
-            echo "No snapshot yet; starting a fresh track record."
+          set -euo pipefail
+          status=0
+          git ls-remote --exit-code --heads origin dashboard-data > /dev/null || status=$?
+          if [ "$status" -eq 2 ]; then
+            echo "No dashboard-data branch yet: starting a fresh track record." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "previous=" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Couldn't reach the dashboard-data branch (git exit $status); not running without the track record."
+            exit 1
+          fi
+          git fetch --depth 1 origin dashboard-data
+          if ! git cat-file -e FETCH_HEAD:data/history/predictions.parquet 2>/dev/null; then
+            echo "::error::The last snapshot has no track record (data/history/predictions.parquet); restore it by hand."
+            exit 1
+          fi
+          mkdir -p data "$RUNNER_TEMP/previous"
+          git archive FETCH_HEAD data/history | tar -x -C .
+          git archive FETCH_HEAD data/history | tar -x -C "$RUNNER_TEMP/previous"
+          ls -la data/history
+          echo "previous=$RUNNER_TEMP/previous" >> "$GITHUB_OUTPUT"
 
       - name: Run pipeline
-        if: steps.check.outputs.skip != 'true'
+        if: steps.check.outputs.skip != 'true' && steps.restore.outcome == 'success'
         env:
           SMP_NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}   # optional: phone push via ntfy.sh
         run: smp run-all
 
       - name: Publish dashboard snapshot
-        # also after a partly failed run: publish whatever succeeded and keep the track record moving
-        if: steps.check.outputs.skip != 'true' && !cancelled()
+        # also after a partly failed run: publish whatever succeeded and keep the track record moving,
+        # but never without the restored record, and never if a published prediction would be lost
+        if: steps.check.outputs.skip != 'true' && steps.restore.outcome == 'success' && !cancelled()
         run: |
           [ -f models/risk_predictions.parquet ] || { echo "No forecasts to publish"; exit 1; }
-          smp publish --out site-data
+          previous="${{ steps.restore.outputs.previous }}"
+          smp publish --out site-data ${previous:+--previous "$previous"}
           cd site-data
           git init -q -b dashboard-data
           git add -A

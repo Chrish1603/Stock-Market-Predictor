@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from smp.clean import clean_path, report_path
-from smp.config import Config
+from smp.config import Config, PathsConfig
 from smp.features import features_path
 from smp.history import history_path
 
@@ -34,8 +34,49 @@ def _copy(src: Path, root: Path, out: Path) -> int:
     return dest.stat().st_size
 
 
-def build_snapshot(cfg: Config, out: Path, root: Path) -> dict:
-    """Copy the dashboard's inputs from a pipeline run (under `root`) into `out`."""
+class SnapshotError(RuntimeError):
+    """Publishing would damage the official track record; nothing was written."""
+
+
+def check_records_kept(cfg: Config, previous: Path) -> None:
+    """Refuse to publish if any prediction in the previous snapshot's track records (under `previous`,
+    laid out like a snapshot) is missing from this run's. Guards against a run that lost the record."""
+    from smp.history import HistoryError, _read, load_record, record_keys
+    from smp.sync import records
+
+    prev_dir = Path(previous) / PathsConfig().history  # snapshots use the default layout
+    problems = []
+    for name, (path, backup) in records(cfg).items():
+        prev_main, prev_backup = prev_dir / path.name, prev_dir / backup.name
+        if not prev_main.exists() and not prev_backup.exists():
+            continue  # the previous snapshot had no such record (e.g. a record type added since)
+        try:
+            before = record_keys(load_record(prev_main, prev_backup))
+        except HistoryError as exc:
+            log.warning("can't read the previous %s track record, so it can't be checked: %s", name, exc)
+            continue
+        if not before:
+            continue
+        try:
+            now = record_keys(_read(path)) if path.exists() else set()
+        except Exception as exc:
+            problems.append(f"{name} track record {path} is unreadable ({exc})")
+            continue
+        if missing := before - now:
+            t, h, d = sorted(missing, key=lambda k: k[2])[0]
+            problems.append(
+                f"{name} track record would lose {len(missing)} of {len(before)} published prediction(s), "
+                f"from {d.date()} ({t} {h}d) on"
+            )
+    if problems:
+        raise SnapshotError("refusing to publish: " + "; ".join(problems))
+
+
+def build_snapshot(cfg: Config, out: Path, root: Path, previous: Path | None = None) -> dict:
+    """Copy the dashboard's inputs from a pipeline run (under `root`) into `out`. With `previous` (the
+    last published snapshot), first check that no published prediction would be lost."""
+    if previous is not None:
+        check_records_kept(cfg, previous)
     out = Path(out)
     if out.exists():
         shutil.rmtree(out)

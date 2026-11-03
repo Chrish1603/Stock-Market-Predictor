@@ -142,6 +142,9 @@ the run page.
 **One track record:** the GitHub run keeps the official record, the one the hosted dashboard shows. Each local
 run first merges it in (`smp sync`): for days both recorded, the official prediction wins, and anything only the
 local record has is kept, so nothing is ever dropped. Turn this off with `dashboard.sync_track_record: false`.
+The GitHub run protects the official record too: it stops if it can't restore the record from the last snapshot
+(a fresh record only starts before the first snapshot exists), and `smp publish --previous` refuses to publish a
+snapshot that would lose any published prediction.
 
 **Health check:** `smp health` lists stale or missing data and exits with an error if there is any. The daily
 summary and the dashboard also warn when data is out of date.

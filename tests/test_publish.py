@@ -101,3 +101,40 @@ def test_summary_leads_with_problems():
     title, text, md = render(now, [], ["stage 'ingest' failed: timeout"])
     assert title.startswith("⚠ 1 problem: stage 'ingest' failed")
     assert md.index("**Problems:**") < md.index("S&P 500")
+
+
+def _rec(*days):
+    from smp.history import append_predictions
+
+    hist = pd.DataFrame()
+    for d in days:
+        hist = append_predictions(
+            hist,
+            pd.DataFrame([{"ticker": "AAA", "horizon": 1, "as_of": pd.Timestamp(d), "p_up": 0.6, "direction": "up"}]),
+        )
+    return hist
+
+
+def test_publish_refuses_to_lose_published_predictions(tmp_path):
+    import pytest
+
+    from smp.history import history_path, save_history
+    from smp.publish import SnapshotError, check_records_kept
+
+    previous = tmp_path / "previous"
+    save_history(Config(paths=PathsConfig().resolve(previous)), _rec("2026-01-02", "2026-01-05"))
+    cfg = Config(paths=PathsConfig().resolve(tmp_path / "run"))
+
+    with pytest.raises(SnapshotError, match="lose 2 of 2 published prediction"):
+        check_records_kept(cfg, previous)  # a run that started a fresh record
+    save_history(cfg, _rec("2026-01-05", "2026-01-06"))
+    with pytest.raises(SnapshotError, match="lose 1 of 2 published prediction.*from 2026-01-02"):
+        check_records_kept(cfg, previous)
+    history_path(cfg).unlink()
+    save_history(cfg, _rec("2026-01-02", "2026-01-05", "2026-01-06"))
+    check_records_kept(cfg, previous)  # everything kept, plus a new day: fine
+    check_records_kept(cfg, tmp_path / "first-ever")  # nothing published before: nothing to check
+
+    with pytest.raises(SnapshotError):  # build_snapshot checks before writing anything
+        build_snapshot(Config(paths=PathsConfig().resolve(tmp_path / "empty")), tmp_path / "out", tmp_path, previous)
+    assert not (tmp_path / "out").exists()
