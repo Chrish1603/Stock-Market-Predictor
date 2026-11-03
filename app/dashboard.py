@@ -118,6 +118,11 @@ if _v["version"] != (_now := data_version()):
     _v["version"] = _now
 
 # --- colours: validated reference palette, stepped separately for light and dark -------------
+# Greys used inside charts. The viewer can switch theme without the script rerunning, so these must
+# read on both light and dark backgrounds; text colours inside charts come from Streamlit's live theme.
+NEUTRAL = dict(muted="#868b93", actual="#868b93", grid="rgba(128,128,128,0.2)", axis="rgba(128,128,128,0.45)")
+RING = "rgba(255,255,255,0.65)"  # separates markers from the lines they sit on
+
 PALETTES = {
     "light": dict(
         s1="#2a78d6",
@@ -125,25 +130,18 @@ PALETTES = {
         s3="#1baf7a",
         up="#2a78d6",
         down="#e34948",
-        muted="#898781",
-        grid="#e1e0d9",
-        axis="#c3c2b7",
+        muted=NEUTRAL["muted"],
+        grid=NEUTRAL["grid"],
+        axis=NEUTRAL["axis"],
         ink="#0b0b0b",
         ink2="#52514e",
-        actual="#52514e",  # "what happened" lines
+        actual=NEUTRAL["actual"],
         surface="#fcfcfb",
-        card="rgba(255,255,255,0.72)",
         fill_top="rgba(42,120,214,0.22)",
         fill_top2="rgba(235,104,52,0.20)",
         band="rgba(42,120,214,0.10)",
         band_key="rgba(42,120,214,0.35)",  # the band's wash, strong enough to read as a legend key
         band2="rgba(235,104,52,0.10)",
-        # page background: a soft blue glow at the top fading into the normal surface (kept faint behind charts)
-        page_bg=(
-            "radial-gradient(1100px 520px at 88% -8%, rgba(42,120,214,0.13), transparent 70%), "
-            "radial-gradient(900px 480px at 8% -12%, rgba(27,175,122,0.07), transparent 70%), "
-            "linear-gradient(180deg, #f2f6fc 0%, #f8f9fa 380px, #fcfcfb 900px)"
-        ),
         calm_wash="rgba(12,163,12,0.10)",
         stressed_wash="rgba(208,59,59,0.16)",
         seq=["#cde2fb", "#86b6ef", "#2a78d6", "#184f95"],
@@ -154,23 +152,18 @@ PALETTES = {
         s3="#199e70",
         up="#3987e5",
         down="#e66767",
-        muted="#8b919c",
-        grid="#222730",
-        axis="#353b45",
+        muted=NEUTRAL["muted"],
+        grid=NEUTRAL["grid"],
+        axis=NEUTRAL["axis"],
         ink="#eceef1",
         ink2="#c3c8d0",
-        actual="#9aa1ac",  # dimmer than text ink, so it doesn't outshine the forecast
+        actual=NEUTRAL["actual"],
         surface="#0f1216",
-        card="rgba(255,255,255,0.028)",
         fill_top="rgba(57,135,229,0.30)",  # top of fading area fills
         fill_top2="rgba(217,89,38,0.26)",
         band="rgba(57,135,229,0.16)",
         band_key="rgba(57,135,229,0.45)",
         band2="rgba(217,89,38,0.16)",
-        page_bg=(
-            "radial-gradient(1100px 540px at 85% -10%, rgba(57,135,229,0.14), transparent 70%), "
-            "linear-gradient(180deg, #121720 0%, #10141a 420px, #0f1216 900px)"
-        ),
         # on a dark page, green washes read as murky, so calm is kept very faint
         calm_wash="rgba(25,158,112,0.07)",
         stressed_wash="rgba(230,103,103,0.16)",
@@ -184,7 +177,6 @@ C = PALETTES["dark" if theme_type == "dark" else "light"]
 # grey ink = what actually happened. Aqua is a second variant of our own (sizing on the model forecast).
 OURS, ALT, OURS2, ACTUAL = C["s1"], C["s2"], C["s3"], C["actual"]
 FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-UP_TEXT, DOWN_TEXT = ("#0ca30c", "#e66767") if theme_type == "dark" else ("#006300", "#c03030")
 
 st.markdown(
     f"""
@@ -192,8 +184,20 @@ st.markdown(
       [data-testid="stSidebar"] h1 {{ font-size: 1.3rem; letter-spacing: -0.01em; }}
       .block-container {{ padding-top: 2rem; padding-bottom: 3rem; max-width: 1280px; }}
       [data-testid="stHeader"] {{ background: transparent; }}
-      [data-testid="stApp"] {{ background: {C["page_bg"]}; background-attachment: fixed; }}
-      [class*="st-key-card-"] {{ background: {C["card"]}; }}
+      /* light-dark() follows the theme the viewer has now, even if they switch without a rerun */
+      [data-testid="stApp"] {{
+        background:
+          radial-gradient(1100px 540px at 86% -9%,
+            light-dark(rgba(42,120,214,0.13), rgba(57,135,229,0.14)), transparent 70%),
+          radial-gradient(900px 480px at 8% -12%,
+            light-dark(rgba(27,175,122,0.07), rgba(0,0,0,0)), transparent 70%),
+          linear-gradient(180deg, light-dark(#f2f6fc, #121720) 0%, light-dark(#f8f9fa, #10141a) 400px,
+            light-dark(#fcfcfb, #0f1216) 900px);
+        background-attachment: fixed;
+      }}
+      [class*="st-key-card-"] {{ background: light-dark(rgba(255,255,255,0.72), rgba(255,255,255,0.028)); }}
+      .tone-up {{ color: light-dark(#006300, #0ca30c); }}
+      .tone-down {{ color: light-dark(#c03030, #e66767); }}
       h1, h2, h3 {{ letter-spacing: -0.015em; }}
       .stTabs [data-baseweb="tab-list"] {{ gap: 1.6rem; }}
       .stTabs [data-baseweb="tab"] {{ font-size: 0.95rem; padding-left: 0; padding-right: 0; }}
@@ -321,7 +325,7 @@ def style(fig: go.Figure, height: int = 420) -> go.Figure:
     fig.update_layout(
         height=height,
         margin=dict(l=4, r=12, t=(34 if has_title else 10) + (26 if legend else 0), b=4),
-        font=dict(family=FONT, size=12, color=C["ink2"]),
+        font=dict(family=FONT, size=12),
         title=dict(
             x=0,
             xref="paper",
@@ -330,12 +334,12 @@ def style(fig: go.Figure, height: int = 420) -> go.Figure:
             yref="paper",
             yanchor="bottom",
             pad=dict(b=34 if legend else 12),
-            font=dict(size=15, family=FONT, color=C["ink"]),
+            font=dict(size=15, family=FONT),
         ),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         hovermode=fig.layout.hovermode or "x unified",
-        hoverlabel=dict(bgcolor=C["surface"], bordercolor=C["grid"], font=dict(family=FONT, size=12, color=C["ink"])),
+        hoverlabel=dict(font=dict(family=FONT, size=12)),
         showlegend=legend,
         legend=dict(
             orientation="h",
@@ -353,8 +357,7 @@ def style(fig: go.Figure, height: int = 420) -> go.Figure:
         showgrid=False,
         showline=True,
         linecolor=C["axis"],
-        tickfont=dict(color=C["muted"]),
-        title_font=dict(color=C["muted"], size=12),
+        title_font=dict(size=12),
         ticks="",
         showspikes=True,
         spikemode="across",
@@ -367,8 +370,7 @@ def style(fig: go.Figure, height: int = 420) -> go.Figure:
         gridcolor=C["grid"],
         gridwidth=1,
         zeroline=False,
-        tickfont=dict(color=C["muted"]),
-        title_font=dict(color=C["muted"], size=12),
+        title_font=dict(size=12),
     )
     return fig
 
@@ -477,7 +479,7 @@ def calibration_chart(series: list[tuple[str, pd.DataFrame, str]], title: str, f
                 name=name,
                 mode="lines+markers",
                 line=dict(color=color, width=2),
-                marker=dict(size=9, color=color, line=dict(width=2, color=C["surface"])),
+                marker=dict(size=9, color=color, line=dict(width=2, color=RING)),
                 customdata=b["n"],
                 hovertemplate=(
                     f"forecast %{{x:{fmt}}} → happened %{{y:{fmt}}}<br>%{{customdata:,}} forecasts<extra>{name}</extra>"
@@ -722,7 +724,7 @@ with tab_today:
                 text += f" The model expects more turbulence; sizing on its forecast would mean <b>{alt:.0%}</b>."
 
             change = close.iloc[-1] / close.iloc[-22] - 1
-            arrow, tone = ("▲", UP_TEXT) if change >= 0 else ("▼", DOWN_TEXT)
+            arrow, tone = ("▲", "tone-up") if change >= 0 else ("▼", "tone-down")
             direction = ""
             if not d.empty and dmeta:
                 dd_ = d.iloc[0]
@@ -736,7 +738,7 @@ with tab_today:
                 st.markdown(
                     f"<div class='card-head'><div><span class='ticker'>{t}</span>"
                     f"<span class='price'>{close.iloc[-1]:,.2f}</span></div>"
-                    f"<div class='delta'><span style='color:{tone}'>{arrow} {abs(change):.1%}</span> "
+                    f"<div class='delta'><span class='{tone}'>{arrow} {abs(change):.1%}</span> "
                     f"<span class='muted' style='font-weight:400'>past month</span></div></div>",
                     unsafe_allow_html=True,
                 )
@@ -1061,7 +1063,7 @@ with tab_risk:
                         y=labels,
                         mode="markers",
                         name=STRATEGY_LABELS.get(s_, s_),
-                        marker=dict(size=11, color=color, line=dict(width=2, color=C["surface"])),
+                        marker=dict(size=11, color=color, line=dict(width=2, color=RING)),
                         customdata=[c[live_lh]["avg_weight"] for c in crises],
                         hovertemplate="%{x:.0%} worst drawdown<extra>%{fullData.name}</extra>",
                     )
@@ -1420,7 +1422,7 @@ with tab_price:
         subplot_titles=(f"<b>{ticker}</b>   " + "  ".join(keys), "<b>Volume</b>"),
     )
     for ann in fig.layout.annotations:
-        ann.update(x=0, xanchor="left", font=dict(size=13, color=C["ink2"], family=FONT))
+        ann.update(x=0, xanchor="left", font=dict(size=13, family=FONT))
     if show_bb:
         fig.add_trace(go.Scatter(x=ix.index, y=ix["upper"], line=dict(width=0), hoverinfo="skip"), 1, 1)
         fig.add_trace(
@@ -1462,7 +1464,7 @@ with tab_price:
                 showarrow=False,
                 xanchor="left",
                 xshift=4,
-                font=dict(size=11, color=C["ink2"]),
+                font=dict(size=11),
                 row=1,
                 col=1,
             )
@@ -1556,7 +1558,7 @@ with tab_price:
             ),
         )
         for ann in tf.layout.annotations:
-            ann.update(x=0, xanchor="left", font=dict(size=13, color=C["ink2"], family=FONT))
+            ann.update(x=0, xanchor="left", font=dict(size=13, family=FONT))
         tf.add_hrect(
             y0=30, y1=70, fillcolor=C["band"], line_width=0, layer="below", row=1, col=1, exclude_empty_subplots=False
         )

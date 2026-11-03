@@ -116,3 +116,16 @@ def test_new_snapshot_replaces_cached_prices(tmp_path, monkeypatch):
     at.run()
     assert not at.exception, at.exception
     assert as_of(at) != before
+
+
+def test_page_colours_follow_the_live_theme():
+    """Viewers can switch light/dark without the script rerunning, so page-level colours must be chosen by
+    the browser (CSS light-dark()), not picked in Python from the theme seen at the last run."""
+    import re
+    from pathlib import Path
+
+    src = (Path(__file__).parents[1] / "app" / "dashboard.py").read_text()
+    for selector in ('[data-testid="stApp"]', '[class*="st-key-card-"]'):
+        rule = re.search(re.escape(selector) + r" \{\{(.*?)\}\}", src, re.S)
+        assert rule, selector
+        assert "light-dark(" in rule.group(1) and "C[" not in rule.group(1), selector
