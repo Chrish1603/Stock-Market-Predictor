@@ -52,3 +52,20 @@ def test_risk_tab_renders():
         assert not at.exception, (opt, at.exception)
     today = next(t for t in at.tabs if t.label == "Today")
     assert "card-text" in " ".join(m.value for m in today.markdown)
+
+
+def test_dashboard_reloads_outdated_smp_modules(monkeypatch):
+    """Streamlit Cloud pulls new code without restarting; an old smp module still in memory must not
+    break a new one that imports from it (seen as ImportError: load_record from smp.history)."""
+    import sys
+
+    import smp.history
+
+    cfg = load_config()
+    if not (cfg.paths.models / "risk_predictions.parquet").exists():
+        pytest.skip("run `smp run-all` first")
+    monkeypatch.delattr(smp.history, "load_record")  # as if loaded before load_record existed
+    monkeypatch.setattr(sys.modules["smp"], "_dashboard_loaded_at", 0.0, raising=False)  # source is newer
+    sys.modules.pop("smp.risk_history", None)
+    at = _app()
+    assert not at.exception, at.exception

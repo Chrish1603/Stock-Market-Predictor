@@ -22,6 +22,28 @@ from sklearn.metrics import confusion_matrix, roc_curve
 # (needed when smp is installed as a regular package, as on Streamlit Cloud).
 os.environ.setdefault("SMP_PROJECT_ROOT", str(Path(__file__).resolve().parents[1]))
 
+
+def drop_stale_smp_modules() -> None:
+    """Streamlit keeps imported modules between reruns, and Streamlit Cloud pulls code updates without
+    restarting. A new module importing from an old one already loaded then fails, so forget every smp
+    module when any of its source files is newer than the import."""
+    import sys
+    import time
+
+    if (pkg := sys.modules.get("smp")) is not None:
+        loaded_at = getattr(pkg, "_dashboard_loaded_at", 0.0)
+        newest = max((p.stat().st_mtime for p in Path(pkg.__file__).parent.glob("*.py")), default=0.0)
+        if newest > loaded_at:
+            for name in [m for m in sys.modules if m == "smp" or m.startswith("smp.")]:
+                del sys.modules[name]
+    import smp
+
+    if not hasattr(smp, "_dashboard_loaded_at"):
+        smp._dashboard_loaded_at = time.time()
+
+
+drop_stale_smp_modules()
+
 from smp import pipeline  # noqa: E402
 from smp.allocation import allocation_path  # noqa: E402
 from smp.clean import clean_path, report_path  # noqa: E402
