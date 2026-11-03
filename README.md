@@ -93,7 +93,7 @@ Other commands:
 
 ```bash
 smp run-all --skip-train         # refresh data and forecasts with the existing models
-smp ingest | clean | features | train | predict | notify    # one stage
+smp ingest | clean | features | train | sync | predict | notify    # one stage
 smp track-record                 # how past live risk forecasts and direction calls turned out
 smp experiment run experiments/risk_vol_models.yaml         # compare config variants
 smp long-history                 # S&P 500 risk models from 1993, tested through past crashes (~1 min)
@@ -138,6 +138,10 @@ After each US close (or via *Run workflow*) it runs the pipeline and publishes t
 scheduler can drop runs, so there are three slots (22:30, 01:30 and 04:30 UTC); later ones exit early once the day
 is published. A run fails, and GitHub emails you, if data is still out of date afterwards. The summary appears on
 the run page.
+
+**One track record:** the GitHub run keeps the official record, the one the hosted dashboard shows. Each local
+run first merges it in (`smp sync`): for days both recorded, the official prediction wins, and anything only the
+local record has is kept, so nothing is ever dropped. Turn this off with `dashboard.sync_track_record: false`.
 
 **Health check:** `smp health` lists stale or missing data and exits with an error if there is any. The daily
 summary and the dashboard also warn when data is out of date.
@@ -259,6 +263,7 @@ smp experiment index    # rebuild docs/RESULTS.md from the reports
 | Risk | `smp.risk` | Volatility (vs persistence and HAR) and calibrated 5%-drop models, with out-of-fold predictions |
 | Allocation | `smp.allocation` | Volatility-targeted sizing and its out-of-sample backtest |
 | Regime | `smp.regime` | Calm / normal / stressed label from forecast volatility, breadth and trend |
+| Sync | `smp.sync` | Local runs adopt the official track record from the published snapshot |
 | Predict | `smp.predict`, `smp.history`, `smp.risk_history` | Latest forecasts and the append-only, auto-scored track records |
 | Notify | `smp.notify` | Daily summary to file, GitHub, Mac and phone |
 | Publish | `smp.publish` | Dashboard snapshot |

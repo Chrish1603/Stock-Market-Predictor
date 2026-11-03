@@ -70,6 +70,9 @@ dashboard:
   # A hosted dashboard with no local pipeline output downloads this snapshot (built daily by
   # GitHub Actions with `smp publish`). Local runs use local data and ignore this.
   data_url: https://github.com/Chrish1603/Stock-Market-Predictor/archive/refs/heads/dashboard-data.tar.gz
+  # The daily GitHub run keeps the official track record. Local runs merge it in before predicting
+  # (its rows win for days both recorded; nothing local is ever dropped). Skipped on GitHub Actions.
+  sync_track_record: true
 
 notify:
   macos: true                        # desktop notification after each local run (skipped off macOS)

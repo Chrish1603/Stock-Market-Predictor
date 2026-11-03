@@ -175,6 +175,9 @@ class NotifyConfig(Strict):
 class DashboardConfig(Strict):
     # Where a hosted dashboard downloads its data snapshot when no local pipeline output exists
     data_url: str | None = None
+    # Local runs adopt the track record in that snapshot (written by the daily GitHub run, the official
+    # record) before adding their own predictions, so local and hosted dashboards show the same record.
+    sync_track_record: bool = True
 
 
 class Config(Strict):

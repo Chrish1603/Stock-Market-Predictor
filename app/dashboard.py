@@ -62,25 +62,9 @@ st.set_page_config(page_title="Stock Market Predictor", layout="wide")
 @st.cache_resource(ttl=3600, show_spinner="Downloading the latest data snapshot...")
 def download_snapshot(url: str) -> str:
     """Fetch and unpack a published snapshot (see `smp publish`); refreshed at most hourly."""
-    import io
-    import ssl
-    import tarfile
-    import tempfile
-    import urllib.request
+    from smp.publish import fetch_snapshot
 
-    import certifi
-
-    ctx = ssl.create_default_context(cafile=certifi.where())  # python.org builds may lack system certificates
-    with urllib.request.urlopen(url, timeout=60, context=ctx if url.startswith("https") else None) as resp:
-        payload = resp.read()
-    dest = Path(tempfile.mkdtemp(prefix="smp-snapshot-")).resolve()
-    with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as tar:
-        for member in tar.getmembers():  # only plain files and folders, only inside dest
-            target = (dest / member.name).resolve()
-            if not (member.isfile() or member.isdir()) or (dest not in target.parents and target != dest):
-                continue
-            tar.extract(member, dest)
-    return str(next(dest.rglob("manifest.json")).parent)
+    return str(fetch_snapshot(url))
 
 
 def choose_data_root() -> bool:

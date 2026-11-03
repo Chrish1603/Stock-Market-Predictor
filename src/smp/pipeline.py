@@ -1,4 +1,4 @@
-"""Run the pipeline stages in order: ingest -> clean -> features -> train -> predict."""
+"""Run the pipeline stages in order: ingest -> clean -> features -> train -> sync -> predict -> notify."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from smp.ingest import ingest_all
 from smp.notify import notify
 from smp.predict import predict_all
 from smp.safeio import atomic_write_json, run_lock
+from smp.sync import sync_track_record
 from smp.train import train_all
 
 log = logging.getLogger("smp")
@@ -23,6 +24,7 @@ STAGES = {
     "clean": clean_all,
     "features": build_all,
     "train": train_all,
+    "sync": sync_track_record,  # adopt the official track record before adding today's predictions
     "predict": predict_all,
     "notify": notify,
 }
@@ -103,4 +105,4 @@ def run_all(cfg: Config, skip_ingest: bool = False, skip_train: bool = False) ->
 
 def refresh(cfg: Config) -> dict:
     """Fetch new data and update predictions without retraining (used by the dashboard)."""
-    return run(cfg, ["ingest", "clean", "features", "predict"], keep_going=True)
+    return run(cfg, ["ingest", "clean", "features", "sync", "predict"], keep_going=True)

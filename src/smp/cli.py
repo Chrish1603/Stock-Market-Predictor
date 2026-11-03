@@ -69,6 +69,12 @@ def train(config: Path | None = ConfigOpt, tune: bool = typer.Option(False, help
 
 
 @app.command()
+def sync(config: Path | None = ConfigOpt):
+    """Merge the official track record (from the published snapshot) into the local one."""
+    _run(_cfg(config), ["sync"])
+
+
+@app.command()
 def predict(config: Path | None = ConfigOpt):
     """Write the latest next-day predictions."""
     _run(_cfg(config), ["predict"])

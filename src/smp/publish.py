@@ -69,3 +69,30 @@ def build_snapshot(cfg: Config, out: Path, root: Path) -> dict:
     (out / MANIFEST).write_text(json.dumps(manifest, indent=2))
     log.info("snapshot: %d files, %.1f MB, data as of %s -> %s", len(files), size / 1e6, as_of, out)
     return manifest
+
+
+def fetch_snapshot(url: str, dest: Path | None = None, timeout: int = 60) -> Path:
+    """Download and unpack a published snapshot (a .tar.gz, e.g. GitHub's branch archive); returns its root,
+    the folder holding manifest.json. Only plain files and folders inside `dest` are extracted."""
+    import io
+    import ssl
+    import tarfile
+    import tempfile
+    import urllib.request
+
+    import certifi
+
+    ctx = ssl.create_default_context(cafile=certifi.where())  # python.org builds may lack system certificates
+    with urllib.request.urlopen(url, timeout=timeout, context=ctx if url.startswith("https") else None) as resp:
+        payload = resp.read()
+    dest = Path(dest or tempfile.mkdtemp(prefix="smp-snapshot-")).resolve()
+    with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as tar:
+        for member in tar.getmembers():
+            target = (dest / member.name).resolve()
+            if not (member.isfile() or member.isdir()) or (dest not in target.parents and target != dest):
+                continue
+            tar.extract(member, dest)
+    try:
+        return next(dest.rglob(MANIFEST)).parent
+    except StopIteration:
+        raise FileNotFoundError(f"{url} is not a dashboard snapshot (no {MANIFEST})") from None
