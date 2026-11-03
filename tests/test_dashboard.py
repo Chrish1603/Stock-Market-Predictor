@@ -7,6 +7,18 @@ from smp.config import load_config
 APP = "../app/dashboard.py"
 
 
+@pytest.fixture(autouse=True)
+def keep_smp_modules():
+    """The dashboard may reload smp modules; put the originals back so later tests share one copy."""
+    import sys
+
+    saved = {k: v for k, v in sys.modules.items() if k == "smp" or k.startswith("smp.")}
+    yield
+    for k in [k for k in sys.modules if k == "smp" or k.startswith("smp.")]:
+        del sys.modules[k]
+    sys.modules.update(saved)
+
+
 def _app():
     from streamlit.testing.v1 import AppTest
 
