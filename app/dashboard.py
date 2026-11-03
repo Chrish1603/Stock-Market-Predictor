@@ -48,8 +48,10 @@ from smp import pipeline  # noqa: E402
 from smp.allocation import allocation_path  # noqa: E402
 from smp.clean import clean_path, report_path  # noqa: E402
 from smp.config import load_config  # noqa: E402
+from smp.experiment import REPORTS_DIR  # noqa: E402
 from smp.features import bollinger, features_path, macd, rsi  # noqa: E402
 from smp.history import load_history, summarize  # noqa: E402
+from smp.insights import calibration_bins, earnings_days, price_range, range_coverage, rolling_vol  # noqa: E402
 from smp.predict import predictions_path  # noqa: E402
 from smp.regime import market_dir  # noqa: E402
 from smp.risk import risk_dir, risk_predictions_path  # noqa: E402
@@ -335,7 +337,7 @@ def style(fig: go.Figure, height: int = 420) -> go.Figure:
 
 def key(color: str, label: str, mark: str = "line") -> str:
     """An inline legend key: a coloured mark beside label text (text stays in ink colours)."""
-    glyph = {"line": "━", "area": "■", "dot": "●"}[mark]
+    glyph = {"line": "━", "area": "■", "dot": "●", "triangle": "▲"}[mark]
     return f"<span style='color:{color}'>{glyph}</span> {label}"
 
 
@@ -378,6 +380,81 @@ def load_track_record() -> pd.DataFrame:
 @st.cache_data
 def load_risk_track_record() -> pd.DataFrame:
     return load_risk_history(CFG)
+
+
+@st.cache_data
+def load_oos(ticker: str, horizon: int) -> pd.DataFrame | None:
+    """Out-of-sample risk forecasts: walk-forward folds, then the hold-out year."""
+    parts = [
+        load_parquet(str(risk_dir(CFG, ticker, horizon) / f))
+        for f in ("oos_predictions.parquet", "holdout_predictions.parquet")
+    ]
+    if any(x is None for x in parts):
+        return None
+    oos = pd.concat(parts).sort_index()
+    return oos[~oos.index.duplicated(keep="last")]
+
+
+@st.cache_data
+def coverage(ticker: str, horizon: int) -> dict:
+    """How often past moves stayed inside the forecast price ranges."""
+    oos, px_ = load_oos(ticker, horizon), load_prices(ticker)
+    if oos is None or px_ is None:
+        return {"typical": np.nan, "wide": np.nan, "n": 0}
+    return range_coverage(oos["pred_logvol"], px_["Close"], horizon)
+
+
+def pooled_coverage(horizon: int) -> dict:
+    cs = [coverage(t, horizon) for t in CFG.data.tickers]
+    n = sum(c["n"] for c in cs)
+    return {k: sum(c[k] * c["n"] for c in cs if c["n"]) / n if n else np.nan for k in ("typical", "wide")} | {"n": n}
+
+
+def calibration_chart(series: list[tuple[str, pd.DataFrame, str]], title: str, fmt: str) -> go.Figure:
+    """Grouped forecasts vs outcomes, with the diagonal where forecasts mean what they say."""
+    fig = go.Figure()
+    top = max(float(max(b["predicted"].max(), b["actual"].max())) for _, b, _ in series) * 1.08
+    fig.add_trace(
+        go.Scatter(
+            x=[0, top],
+            y=[0, top],
+            name="Perfect",
+            line=dict(color=C["axis"], width=1),
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    )
+    for name, b, color in series:
+        fig.add_trace(
+            go.Scatter(
+                x=b["predicted"],
+                y=b["actual"],
+                name=name,
+                mode="lines+markers",
+                line=dict(color=color, width=2),
+                marker=dict(size=9, color=color, line=dict(width=2, color=C["surface"])),
+                customdata=b["n"],
+                hovertemplate=(
+                    f"forecast %{{x:{fmt}}} → happened %{{y:{fmt}}}<br>%{{customdata:,}} forecasts<extra>{name}</extra>"
+                ),
+            )
+        )
+    fig.add_annotation(
+        x=top * 0.97,
+        y=top * 0.97,
+        text="forecast = what happened",
+        showarrow=False,
+        xanchor="right",
+        yanchor="bottom",
+        textangle=0,
+        font=dict(color=C["muted"], size=11),
+    )
+    fig.update_layout(
+        title=title, hovermode="closest", xaxis_title="Forecast (group average)", yaxis_title="What happened"
+    )
+    fig.update_xaxes(tickformat=fmt, range=[0, top], showspikes=False)
+    fig.update_yaxes(tickformat=fmt, range=[0, top])
+    return fig
 
 
 @st.cache_data
@@ -705,14 +782,9 @@ with tab_risk:
         )
 
         # Forecast vs realised volatility (out of sample)
-        oos_parts = [
-            load_parquet(str(risk_dir(CFG, ticker, rh) / f))
-            for f in ("oos_predictions.parquet", "holdout_predictions.parquet")
-        ]
         rmeta = load_json(str(risk_dir(CFG, ticker, rh) / "metrics.json"))
-        if all(x is not None for x in oos_parts) and rmeta:
-            oos = pd.concat(oos_parts).sort_index()
-            oos = oos[~oos.index.duplicated(keep="last")]
+        oos = load_oos(ticker, rh)
+        if oos is not None and rmeta:
             if not st.toggle("Show full history (2013 onwards)", key="vol_full"):
                 oos = oos.loc[oos.index[-1] - pd.DateOffset(years=2) :]
             vm = rmeta["vol"]
@@ -741,6 +813,44 @@ with tab_risk:
                 f"Walk-forward CV R² on log volatility: forecast {vm['cv'][sel]['r2']:.2f}, HAR "
                 f"{vm['cv']['har']['r2']:.2f}, last month's vol {vm['cv']['persistence']['r2']:.2f}. "
                 f"Average error {vm['cv'][sel]['mae_vol_points']:.1%} points."
+            )
+
+        # Can the numbers be trusted? Every out-of-sample forecast for every stock, grouped
+        pooled = [o for t in CFG.data.tickers if (o := load_oos(t, rh)) is not None]
+        if pooled:
+            allo = pd.concat(pooled)
+            st.subheader("Can you trust these numbers?")
+            st.caption(
+                f"Every out-of-sample {rh}-day forecast for the {len(pooled)} stocks since 2013 ({len(allo):,}), "
+                "sorted into 8 equal groups from lowest to highest forecast. Points on the grey diagonal mean the "
+                "forecasts meant what they said."
+            )
+            left, right = st.columns(2, gap="large")
+            actual_vol = np.exp(allo["actual_logvol"])
+            vol_fig = calibration_chart(
+                [
+                    ("Last month's vol", calibration_bins(np.exp(allo["trailing_logvol"]), actual_vol, 8), ALT),
+                    ("Forecast", calibration_bins(np.exp(allo["pred_logvol"]), actual_vol, 8), OURS),
+                ],
+                "Volatility: forecast vs what happened",
+                ".0%",
+            )
+            with left:
+                show(style(vol_fig, height=400))
+            drop_fig = calibration_chart(
+                [("Forecast", calibration_bins(allo["p_drop"], allo["actual_drop"], 8), OURS)],
+                f"Chance of a {rc.drop_threshold:.0%} drop: forecast vs how often",
+                ".0%",
+            )
+            with right:
+                show(style(drop_fig, height=400))
+            cov = pooled_coverage(rh)
+            st.caption(
+                "Last month's volatility overshoots at the extremes: very high readings were followed by calmer "
+                "periods and very low ones by livelier periods. The forecast tracks the diagonal much more closely, "
+                f"though it runs slightly low. Price ranges (Price tab): {cov['typical']:.0%} of {rh}-day moves stayed "
+                f"inside the typical range (68% if exact) and {cov['wide']:.0%} inside the wide one (95%). They're "
+                "slightly too narrow, because big surprises happen more often than a bell curve allows."
             )
 
         # Allocation backtest
@@ -790,6 +900,66 @@ with tab_risk:
             dd.update_yaxes(tickformat=".0%")
             show(style(eq, height=380))
             show(style(dd, height=280))
+
+            # What vol targeting does: steadier volatility, by holding less when markets are rough
+            if choice == ticker:
+                weight = curves[f"{live}_weight"]
+            else:
+                ws = [
+                    c[f"{live}_weight"]
+                    for t in CFG.data.tickers
+                    if (c := load_parquet(str(allocation_path(CFG, t) / "curves.parquet"))) is not None
+                ]
+                weight = pd.concat(ws, axis=1).mean(axis=1) if ws else None
+            hold_col, vol_col = st.columns(2, gap="large")
+            if weight is not None:
+                hf = go.Figure(
+                    go.Scatter(
+                        x=weight.index,
+                        y=weight,
+                        name="Invested",
+                        line=dict(color=OURS, width=1.5),
+                        fill="tozeroy",
+                        fillcolor=C["band"],
+                        hovertemplate="%{y:.0%} invested",
+                    )
+                )
+                hf.update_layout(title=f"How much {STRATEGY_LABELS[live].lower()} held")
+                hf.update_yaxes(tickformat=".0%", range=[0, 1.05])
+                with hold_col:
+                    show(style(hf, height=280))
+            rv = go.Figure()
+            for s_, color in (("buy_hold", ALT), (live, OURS)):
+                eqs = curves[f"{s_}_equity"]
+                rv.add_trace(
+                    go.Scatter(
+                        x=eqs.index,
+                        y=rolling_vol(eqs.pct_change()),
+                        name=STRATEGY_LABELS[s_],
+                        line=dict(color=color, width=1.75),
+                        hovertemplate="%{y:.0%}",
+                    )
+                )
+            rv.add_hline(
+                y=rc.target_vol,
+                line=dict(color=C["axis"], width=1),
+                annotation=dict(text=f"{rc.target_vol:.0%} target", font=dict(color=C["muted"], size=11)),
+                annotation_position="top left",
+            )
+            rv.update_layout(title="Volatility over the past year")
+            rv.update_yaxes(tickformat=".0%", rangemode="tozero")
+            with vol_col:
+                show(style(rv, height=280))
+            st.caption(
+                "Left: the strategy cuts its holding when volatility rises (2020, 2022) and goes back to fully "
+                "invested when markets calm. Right: that keeps its volatility steadier than buy & hold's."
+                + (
+                    " Each stock is sized to the target on its own; together they run below it, because the stocks "
+                    "don't all move together."
+                    if choice != ticker
+                    else ""
+                )
+            )
             table = pd.DataFrame({STRATEGY_LABELS[s]: stats[s] for s in STRATEGY_LABELS if s in stats}).T
             table = table[["cagr", "volatility", "sharpe", "max_drawdown", "calmar", "avg_weight", "turnover_per_year"]]
             table.columns = ["CAGR", "Volatility", "Sharpe", "Max drawdown", "Calmar", "Avg invested", "Turnover/yr"]
@@ -811,6 +981,60 @@ with tab_risk:
                 "Uses only forecasts made before each day (walk-forward folds, then the hold-out year), "
                 f"{CFG.backtest.cost:.1%} cost per unit traded, no leverage. Vol targeting holds cash part of the "
                 "time, so it gives up return in strong bull markets in exchange for much smaller drawdowns."
+            )
+
+        # Through past crashes: the long-history study (S&P 500 back to 1993)
+        lh = load_json(str(REPORTS_DIR / "long_history.json"))
+        if lh and lh.get("crises"):
+            live_lh = lh["control_strategy"]["name"]
+            crises = lh["crises"][::-1]  # oldest at the top
+
+            def crash_label(c: dict) -> str:
+                years = c["start"][:4] + ("–" + c["end"][2:4] if c["end"][:4] != c["start"][:4] else "")
+                return c["crisis"] if c["start"][:4] in c["crisis"] else f"{c['crisis']} ({years})"
+
+            labels = [crash_label(c) for c in crises]
+            fig = go.Figure()
+            seg_x, seg_y = [], []
+            for c, lab in zip(crises, labels, strict=True):
+                seg_x += [c["buy_hold"]["max_drawdown"], c[live_lh]["max_drawdown"], None]
+                seg_y += [lab, lab, None]
+            fig.add_trace(
+                go.Scatter(
+                    x=seg_x,
+                    y=seg_y,
+                    mode="lines",
+                    line=dict(color=C["axis"], width=2),
+                    hoverinfo="skip",
+                    showlegend=False,
+                )
+            )
+            for s_, color in (("buy_hold", ALT), (live_lh, OURS)):
+                fig.add_trace(
+                    go.Scatter(
+                        x=[c[s_]["max_drawdown"] for c in crises],
+                        y=labels,
+                        mode="markers",
+                        name=STRATEGY_LABELS.get(s_, s_),
+                        marker=dict(size=11, color=color, line=dict(width=2, color=C["surface"])),
+                        customdata=[c[live_lh]["avg_weight"] for c in crises],
+                        hovertemplate="%{x:.0%} worst drawdown<extra>%{fullData.name}</extra>",
+                    )
+                )
+            fig.update_layout(title="Worst drawdown in each crash: buy & hold vs vol targeting", hovermode="y unified")
+            fig.update_xaxes(tickformat=".0%", showspikes=False)
+            fig.update_yaxes(showgrid=False)
+            st.markdown("#### Through past crashes")
+            style(fig, height=380)
+            fig.update_layout(title_xref="container")  # start at the chart's edge, not after the labels
+            show(fig)
+            whole = lh["allocation"]["all"]
+            st.caption(
+                f"{lh['ticker']} only, rebuilt from {lh['start'][:4]} with out-of-sample forecasts from "
+                f"{whole[live_lh]['start'][:4]} (see the long_history report). Vol targeting helped most in sudden, "
+                "volatile crashes (2008, COVID) and least in the slow 2000–02 decline, when volatility stayed "
+                "moderate while prices fell. Worst drawdown over the whole period: "
+                f"{whole[live_lh]['max_drawdown']:.0%} vs {whole['buy_hold']['max_drawdown']:.0%} for buy & hold."
             )
 
         # Regime history
@@ -1104,7 +1328,9 @@ with tab_track:
 
 with tab_price:
     ranges = {"3M": 63, "6M": 126, "1Y": 252, "3Y": 756, "All": None}
-    choice = st.segmented_control("Range", list(ranges), default="1Y", key="price_range") or "1Y"
+    ctl_range, ctl_bb = st.columns([3, 2], vertical_alignment="bottom")
+    choice = ctl_range.segmented_control("Range", list(ranges), default="1Y", key="price_range") or "1Y"
+    show_bb = ctl_bb.toggle("Bollinger band", key="show_bb")
 
     c = prices["Close"]
     ind = pd.DataFrame(index=prices.index)
@@ -1114,39 +1340,87 @@ with tab_price:
     n = ranges[choice]
     px, ix = (prices.iloc[-n:], ind.iloc[-n:]) if n else (prices, ind)
 
-    # One figure so the crosshair runs through every panel; each panel's title carries its own legend keys.
+    # Expected range over the risk horizon, from today's volatility forecast
+    rp_all = load_parquet(str(risk_predictions_path(CFG)))
+    cone_h = max(CFG.risk.horizons) if CFG.risk.enabled else None
+    rr = rp_all[(rp_all["ticker"] == ticker) & (rp_all["horizon"] == cone_h)] if rp_all is not None else None
+    cone = (
+        price_range(float(c.iloc[-1]), float(rr["forecast_vol"].iloc[0]), c.index[-1], cone_h)
+        if rr is not None and not rr.empty
+        else None
+    )
+    feats_t = load_parquet(str(features_path(CFG, ticker)))
+    past_e, next_e = (
+        earnings_days(feats_t["days_to_earnings"])
+        if feats_t is not None and "days_to_earnings" in feats_t and feats_t.get("has_earnings", pd.Series([0])).max()
+        else (pd.DatetimeIndex([]), None)
+    )
+
+    keys = [
+        key(C["up"], "up day", "area"),
+        key(C["down"], "down day", "area"),
+        key(C["s2"], "20-day average"),
+        key(C["s3"], "50-day average"),
+    ]
+    if cone is not None:
+        keys.append(key(C["band_key"], f"expected range, next {cone_h} days", "area"))
+    if len(past_e) or next_e is not None:
+        keys.append(key(C["muted"], "earnings", "triangle"))
     fig = make_subplots(
-        rows=4,
+        rows=2,
         cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.075,
-        row_heights=[0.5, 0.13, 0.17, 0.2],
-        subplot_titles=(
-            f"<b>{ticker}</b>   {key(C['up'], 'up day', 'area')}  {key(C['down'], 'down day', 'area')}  "
-            f"{key(C['s2'], '20-day average')}  {key(C['s3'], '50-day average')}  "
-            f"{key(C['band_key'], 'Bollinger band', 'area')}",
-            "<b>Volume</b>",
-            "<b>RSI (14)</b>   above 70 stretched, below 30 washed out",
-            f"<b>MACD</b>   {key(C['s1'], 'MACD')}  {key(C['s2'], 'signal')}  {key(C['muted'], 'difference', 'area')}",
-        ),
+        vertical_spacing=0.08,
+        row_heights=[0.8, 0.2],
+        subplot_titles=(f"<b>{ticker}</b>   " + "  ".join(keys), "<b>Volume</b>"),
     )
-    for ann in fig.layout.annotations:  # panel titles: left-aligned, in ink
+    for ann in fig.layout.annotations:
         ann.update(x=0, xanchor="left", font=dict(size=13, color=C["ink2"], family=FONT))
-    fig.add_trace(go.Scatter(x=ix.index, y=ix["upper"], line=dict(width=0), showlegend=False, hoverinfo="skip"), 1, 1)
-    fig.add_trace(
-        go.Scatter(
-            x=ix.index,
-            y=ix["lower"],
-            line=dict(width=0),
-            fill="tonexty",
-            fillcolor=C["band"],
-            name="Bollinger band",
-            hoverinfo="skip",
-            showlegend=False,
-        ),
-        1,
-        1,
-    )
+    if show_bb:
+        fig.add_trace(go.Scatter(x=ix.index, y=ix["upper"], line=dict(width=0), hoverinfo="skip"), 1, 1)
+        fig.add_trace(
+            go.Scatter(
+                x=ix.index,
+                y=ix["lower"],
+                line=dict(width=0),
+                fill="tonexty",
+                fillcolor=C["band2"],
+                name="Bollinger band",
+                hoverinfo="skip",
+            ),
+            1,
+            1,
+        )
+    if cone is not None:
+        for lo, hi, alpha_key in (("low_wide", "high_wide", "band"), ("low_typical", "high_typical", "band_key")):
+            fig.add_trace(go.Scatter(x=cone.index, y=cone[hi], line=dict(width=0), hoverinfo="skip"), 1, 1)
+            fig.add_trace(
+                go.Scatter(
+                    x=cone.index,
+                    y=cone[lo],
+                    line=dict(width=0),
+                    fill="tonexty",
+                    fillcolor=C[alpha_key],
+                    customdata=cone[hi],
+                    name="typical range" if lo == "low_typical" else "wide range",
+                    hovertemplate="$%{y:,.0f} – $%{customdata:,.0f}",
+                ),
+                1,
+                1,
+            )
+        end = cone.iloc[-1]
+        for col_ in ("high_wide", "high_typical", "low_typical", "low_wide"):
+            fig.add_annotation(
+                x=cone.index[-1],
+                y=end[col_],
+                text=f"${end[col_]:,.0f}",
+                showarrow=False,
+                xanchor="left",
+                xshift=4,
+                font=dict(size=11, color=C["ink2"]),
+                row=1,
+                col=1,
+            )
     fig.add_trace(
         go.Candlestick(
             x=px.index,
@@ -1157,59 +1431,101 @@ with tab_price:
             name=ticker,
             increasing=dict(line=dict(color=C["up"], width=1), fillcolor=C["up"]),
             decreasing=dict(line=dict(color=C["down"], width=1), fillcolor=C["down"]),
-            showlegend=False,
         ),
         1,
         1,
     )
     line = dict(width=1.75)
-    fig.add_trace(
-        go.Scatter(x=ix.index, y=ix["sma20"], name="20-day avg", line=line | dict(color=C["s2"]), showlegend=False),
-        1,
-        1,
-    )
-    fig.add_trace(
-        go.Scatter(x=ix.index, y=ix["sma50"], name="50-day avg", line=line | dict(color=C["s3"]), showlegend=False),
-        1,
-        1,
-    )
+    fig.add_trace(go.Scatter(x=ix.index, y=ix["sma20"], name="20-day avg", line=line | dict(color=C["s2"])), 1, 1)
+    fig.add_trace(go.Scatter(x=ix.index, y=ix["sma50"], name="50-day avg", line=line | dict(color=C["s3"])), 1, 1)
+    shown_e = past_e[past_e >= px.index[0]]
+    if len(shown_e):
+        fig.add_trace(
+            go.Scatter(
+                x=shown_e,
+                y=prices["Low"].reindex(shown_e) * 0.97,
+                mode="markers",
+                name="Earnings",
+                marker=dict(symbol="triangle-up", size=9, color=C["muted"]),
+                hovertemplate="earnings reaction day",
+            ),
+            1,
+            1,
+        )
+    if next_e is not None and cone is not None and next_e <= cone.index[-1]:
+        fig.add_vline(x=next_e, line=dict(color=C["muted"], width=1), row=1, col=1)
+        fig.add_annotation(
+            x=next_e,
+            y=1,
+            yref="y domain",
+            text=f"earnings {next_e:%d %b}",
+            showarrow=False,
+            xanchor="left",
+            xshift=4,
+            yanchor="top",
+            font=dict(size=11, color=C["muted"]),
+            row=1,
+            col=1,
+        )
     vol_colors = np.where(px["Close"] >= px["Open"], C["up"], C["down"])
-    fig.add_trace(
-        go.Bar(
-            x=px.index, y=px["Volume"], marker=dict(color=vol_colors, opacity=0.55), name="Volume", showlegend=False
-        ),
-        2,
-        1,
-    )
-    fig.add_hrect(
-        y0=30, y1=70, fillcolor=C["band"], line_width=0, layer="below", row=3, col=1, exclude_empty_subplots=False
-    )
-    fig.add_trace(
-        go.Scatter(x=ix.index, y=ix["rsi"], name="RSI", line=dict(color=C["s1"], width=1.75), showlegend=False), 3, 1
-    )
-    fig.add_trace(
-        go.Bar(
-            x=ix.index,
-            y=ix["hist"],
-            marker=dict(color=C["muted"], opacity=0.45),
-            name="Difference",
-            showlegend=False,
-        ),
-        4,
-        1,
-    )
-    fig.add_trace(
-        go.Scatter(x=ix.index, y=ix["macd"], name="MACD", line=line | dict(color=C["s1"]), showlegend=False), 4, 1
-    )
-    fig.add_trace(
-        go.Scatter(x=ix.index, y=ix["signal"], name="Signal", line=line | dict(color=C["s2"]), showlegend=False), 4, 1
-    )
+    fig.add_trace(go.Bar(x=px.index, y=px["Volume"], marker=dict(color=vol_colors, opacity=0.55), name="Volume"), 2, 1)
+    x_end = cone.index[-1] + pd.offsets.BDay(3) if cone is not None else px.index[-1]
     fig.update_layout(xaxis_rangeslider_visible=False, showlegend=False, bargap=0.25)
-    fig.update_yaxes(range=[0, 100], tickvals=[30, 50, 70], row=3, col=1)
+    fig.update_xaxes(range=[px.index[0], x_end])
     fig.update_yaxes(tickformat="~s", row=2, col=1)
-    style(fig, height=860)
-    fig.update_layout(margin=dict(t=30))
+    fig.update_yaxes(tickprefix="$", row=1, col=1)
+    style(fig, height=640)
+    fig.update_layout(margin=dict(t=30, r=56), showlegend=False)
     show(fig)
+    if cone is not None:
+        end, vol_now = cone.iloc[-1], float(rr["forecast_vol"].iloc[0])
+        cov = coverage(ticker, cone_h)
+        st.caption(
+            f"Over the next {cone_h} trading days (to about {cone.index[-1]:%a %d %b}), {ticker} typically stays "
+            f"between **\\${end['low_typical']:,.0f} and \\${end['high_typical']:,.0f}** (about 2 in 3 chance) and "
+            f"very likely between \\${end['low_wide']:,.0f} and \\${end['high_wide']:,.0f} (about 19 in 20). "
+            f"From the {vol_now:.0%} volatility forecast, centred on today's price, with no view on direction. "
+            + (
+                f"In testing, {cov['typical']:.0%} and {cov['wide']:.0%} of {cone_h}-day moves stayed inside these "
+                "ranges, so treat them as slightly too narrow: big surprises happen more often than a bell curve "
+                "allows."
+                if cov["n"]
+                else ""
+            )
+        )
+
+    with st.expander("Technical indicators: RSI and MACD"):
+        st.caption(
+            "Standard chart-reading indicators. In this project's tests, inputs like these didn't make up/down "
+            "calls meaningfully better than a coin flip, so they're here for reference."
+        )
+        tf = make_subplots(
+            rows=2,
+            cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.16,
+            subplot_titles=(
+                "<b>RSI (14)</b>   above 70 stretched, below 30 washed out",
+                f"<b>MACD</b>   {key(C['s1'], 'MACD')}  {key(C['s2'], 'signal')}  "
+                f"{key(C['muted'], 'difference', 'area')}",
+            ),
+        )
+        for ann in tf.layout.annotations:
+            ann.update(x=0, xanchor="left", font=dict(size=13, color=C["ink2"], family=FONT))
+        tf.add_hrect(
+            y0=30, y1=70, fillcolor=C["band"], line_width=0, layer="below", row=1, col=1, exclude_empty_subplots=False
+        )
+        tf.add_trace(go.Scatter(x=ix.index, y=ix["rsi"], name="RSI", line=dict(color=C["s1"], width=1.75)), 1, 1)
+        tf.add_trace(
+            go.Bar(x=ix.index, y=ix["hist"], marker=dict(color=C["muted"], opacity=0.45), name="Difference"), 2, 1
+        )
+        tf.add_trace(go.Scatter(x=ix.index, y=ix["macd"], name="MACD", line=line | dict(color=C["s1"])), 2, 1)
+        tf.add_trace(go.Scatter(x=ix.index, y=ix["signal"], name="Signal", line=line | dict(color=C["s2"])), 2, 1)
+        tf.update_yaxes(range=[0, 100], tickvals=[30, 50, 70], row=1, col=1)
+        tf.update_layout(showlegend=False, bargap=0.25)
+        style(tf, height=420)
+        tf.update_layout(margin=dict(t=30), showlegend=False)
+        show(tf)
     with st.expander("Data table"):
         st.dataframe(px.join(ix).sort_index(ascending=False).round(3), width="stretch")
 

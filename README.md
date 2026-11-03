@@ -108,8 +108,8 @@ optional inputs, risk targets, costs, notifications and the snapshot URL. Logs g
 | Tab | What it shows |
 |---|---|
 | **Today** | Market regime, and per stock: 3-month trend, volatility forecast vs its own history, chance of a 5% drop vs usual, suggested holding, and a plain-English summary |
-| **Risk & allocation** | Risk forecasts for 5 and 20 days, forecast vs realised volatility, the 2013–2026 allocation backtest and the regime history |
-| **Price & indicators** | Candlesticks with moving averages and Bollinger band, volume, RSI, MACD |
+| **Risk & allocation** | Risk forecasts for 5 and 20 days; forecast vs realised volatility; calibration (do forecasts mean what they say?); the 2013–2026 allocation backtest with how much it held and its rolling volatility vs the target; drawdowns through past crashes back to 1998; the regime history |
+| **Price & indicators** | Candlesticks with moving averages, earnings days and the expected price range over the next 20 days (from the volatility forecast, with how often past moves stayed inside it); RSI and MACD on request |
 | **Direction models** | Up/down and return models per horizon: metrics vs baseline, ROC curve, what each model relies on, hold-out backtest |
 | **Track record** | Every live forecast and how it turned out: volatility vs last month's figure, drop chances vs the historical rate, direction calls vs always guessing "up" |
 | **Data quality** | What the cleaning step fixed or flagged |

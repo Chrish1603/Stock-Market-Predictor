@@ -48,6 +48,11 @@ def test_dashboard_renders():
     for r in ("3M", "All"):
         _control(at, "price_range").set_value(r).run()
         assert not at.exception, (r, at.exception)
+    next(t for t in at.toggle if t.key == "show_bb").set_value(True).run()
+    assert not at.exception, at.exception
+    for t in cfg.data.tickers:  # every stock's price tab, including funds without earnings dates
+        at.sidebar.selectbox[0].set_value(t).run()
+        assert not at.exception, (t, at.exception)
 
 
 def test_risk_tab_renders():
