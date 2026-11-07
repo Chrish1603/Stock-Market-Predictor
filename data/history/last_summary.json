@@ -1,0 +1,44 @@
+{
+  "as_of": "2026-11-06",
+  "regime": "normal",
+  "market_vol": 0.15601051642946734,
+  "stocks": [
+    {
+      "ticker": "AAPL",
+      "weight": 0.5861087658840937,
+      "vol": 0.23493215048259633,
+      "vol_pct": 0.5059269796111902,
+      "p_drop": 0.3324210002488181,
+      "drop_from_history": true,
+      "earnings_in": null
+    },
+    {
+      "ticker": "MSFT",
+      "weight": 0.42827436262342716,
+      "vol": 0.2769566373613965,
+      "vol_pct": 0.7413466097676624,
+      "p_drop": 0.27096292610102013,
+      "drop_from_history": true,
+      "earnings_in": null
+    },
+    {
+      "ticker": "NVDA",
+      "weight": 0.3139050457697454,
+      "vol": 0.43339516795450456,
+      "vol_pct": 0.6453295400663822,
+      "p_drop": 0.4269393581511722,
+      "drop_from_history": false,
+      "earnings_in": null
+    },
+    {
+      "ticker": "SPY",
+      "weight": 0.7417657645195809,
+      "vol": 0.15601051642946734,
+      "vol_pct": 0.6861071597913703,
+      "p_drop": 0.22896061445162985,
+      "drop_from_history": false,
+      "earnings_in": null
+    }
+  ],
+  "live_risk": []
+}
