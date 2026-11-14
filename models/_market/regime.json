@@ -1,0 +1,9 @@
+{
+  "as_of": "2026-11-13",
+  "ticker": "SPY",
+  "regime": "normal",
+  "forecast_vol": 0.11987550663728601,
+  "vol_percentile": 0.4799905280606204,
+  "breadth": 0.6935483870967742,
+  "trend_up": true
+}
