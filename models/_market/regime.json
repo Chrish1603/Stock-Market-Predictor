@@ -1,0 +1,9 @@
+{
+  "as_of": "2026-11-20",
+  "ticker": "SPY",
+  "regime": "stressed",
+  "forecast_vol": 0.27174070577970155,
+  "vol_percentile": 0.9259697256385998,
+  "breadth": 0.4838709677419355,
+  "trend_up": false
+}

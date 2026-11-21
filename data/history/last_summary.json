@@ -1,0 +1,53 @@
+{
+  "as_of": "2026-11-20",
+  "regime": "stressed",
+  "market_vol": 0.27174070577970155,
+  "stocks": [
+    {
+      "ticker": "AAPL",
+      "weight": 0.5361345517389666,
+      "vol": 0.28454101236765156,
+      "vol_pct": 0.7034058656575213,
+      "p_drop": 0.33159592951104494,
+      "drop_from_history": true,
+      "earnings_in": null
+    },
+    {
+      "ticker": "MSFT",
+      "weight": 0.39456873121963987,
+      "vol": 0.25588226539097747,
+      "vol_pct": 0.6833017975402081,
+      "p_drop": 0.2715313973690742,
+      "drop_from_history": true,
+      "earnings_in": null
+    },
+    {
+      "ticker": "NVDA",
+      "weight": 0.21725953771251877,
+      "vol": 0.5018420603651761,
+      "vol_pct": 0.7329706717123936,
+      "p_drop": 0.6640577429454518,
+      "drop_from_history": false,
+      "earnings_in": null
+    },
+    {
+      "ticker": "SPY",
+      "weight": 0.5650013516149419,
+      "vol": 0.27174070577970155,
+      "vol_pct": 0.9259697256385998,
+      "p_drop": 0.2542947700320944,
+      "drop_from_history": false,
+      "earnings_in": null
+    }
+  ],
+  "live_risk": [
+    {
+      "horizon": 5,
+      "scored": 36,
+      "vol_error": 0.37456107791809984,
+      "trailing_vol_error": 0.4429742072318354,
+      "brier": 0.2577057908708513,
+      "base_rate_brier": 0.285283690034806
+    }
+  ]
+}

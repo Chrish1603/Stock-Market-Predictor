@@ -1,0 +1,42 @@
+{
+  "buy_hold": {
+    "total_return": 422.4174463173281,
+    "cagr": 0.5613303578952666,
+    "volatility": 0.45895972333268525,
+    "sharpe": 1.1991706076821937,
+    "max_drawdown": -0.6633508974336897,
+    "calmar": 0.8462042639376677,
+    "avg_weight": 1.0,
+    "turnover_per_year": 0.0
+  },
+  "trailing_vol_target": {
+    "total_return": 12.808138195837104,
+    "cagr": 0.21334805819234282,
+    "volatility": 0.18302616885513545,
+    "sharpe": 1.1477560355127778,
+    "max_drawdown": -0.2832897960897818,
+    "calmar": 0.7531088699175291,
+    "avg_weight": 0.44060334902359016,
+    "turnover_per_year": 2.3219697267557553
+  },
+  "model_vol_target": {
+    "total_return": 12.345656699032213,
+    "cagr": 0.21030700597167673,
+    "volatility": 0.18439007022647969,
+    "sharpe": 1.1270649606639658,
+    "max_drawdown": -0.31652060737465004,
+    "calmar": 0.664433850661567,
+    "avg_weight": 0.42475937267420044,
+    "turnover_per_year": 0.7982811440147808
+  },
+  "model_vol_target_drop_filter": {
+    "total_return": 9.296622141621178,
+    "cagr": 0.18740207307220635,
+    "volatility": 0.1720863620425134,
+    "sharpe": 1.0838479408224906,
+    "max_drawdown": -0.3042028327139864,
+    "calmar": 0.6160431558124347,
+    "avg_weight": 0.36503014225222874,
+    "turnover_per_year": 1.5907702922671805
+  }
+}
